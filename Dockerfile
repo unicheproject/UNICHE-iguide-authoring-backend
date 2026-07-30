@@ -24,7 +24,8 @@ COPY --from=build /build/target/*.jar application.jar
 RUN java -Djarmode=tools -jar application.jar extract --layers --destination extracted
 
 # ---------------------------------------------------------------------------------------------------
-# Runtime. No secret is ever baked into an image layer: every credential arrives as an environment
+# Runtime. The four layers are copied separately, least to most volatile, so a code change rebuilds only
+# the last one. No secret is ever baked into an image layer: every credential arrives as an environment
 # variable at run time.
 # ---------------------------------------------------------------------------------------------------
 FROM eclipse-temurin:21-jre-alpine
@@ -45,4 +46,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=45s --retries=5 \
     CMD wget -qO- http://localhost:8080/iguide/actuator/health | grep -q '"status":"UP"'
 
-ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
+# The extracted application layer is a thin jar whose manifest classpath points at the dependency
+# layers copied alongside it, so it is launched directly rather than through the loader.
+ENTRYPOINT ["java", "-jar", "application.jar"]
