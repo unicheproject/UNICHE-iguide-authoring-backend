@@ -1,0 +1,4 @@
+# Registers the platform configuration check so it runs before any bean is created, and therefore before
+# the datasource: a deployment missing its issuer must say so, not fail with a database message.
+org.springframework.boot.env.EnvironmentPostProcessor=\
+eu.uniche.iguide.platform.PlatformConfigurationCheck

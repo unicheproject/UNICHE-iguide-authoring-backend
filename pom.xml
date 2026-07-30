@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- The parent BOM is the single version authority. Only dependencies outside it carry an
+         explicit version property, and each is upgraded against its own compatibility matrix.
+         A parent upgrade is one commit that bumps this version and runs the whole test suite. -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.4.7</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>eu.uniche</groupId>
+    <artifactId>iguide-authoring-backend</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>iguide-authoring-backend</name>
+    <description>UNICHE iGuide authoring tool backend</description>
+
+    <properties>
+        <!-- Java 25 is deliberately not adopted: stable support begins with Spring Boot 4.x, so the
+             JDK bump is a consequence of that migration rather than something that can precede it. -->
+        <java.version>21</java.version>
+        <springdoc.version>2.8.6</springdoc.version>
+        <!-- Overrides the parent BOM: the managed 1.20.6 cannot negotiate an API version with
+             Docker Engine 29, which no longer serves the old ones it asks for. -->
+        <testcontainers.version>1.21.3</testcontainers.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Liquibase owns the schema. Hibernate never modifies it. -->
+        <dependency>
+            <groupId>org.liquibase</groupId>
+            <artifactId>liquibase-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Tests.
+
+             There is deliberately no in-memory database at any scope. Once Liquibase owns the
+             schema, a PostgreSQL-compatibility mode cannot exercise the migrations as written:
+             JSONB, partial indexes, and RLS do not survive the substitution. Every test that
+             touches persistence runs against PostgreSQL through Testcontainers. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Tokens are minted locally in tests with nimbus-jose-jwt, which arrives with
+             spring-security-oauth2-jose through the resource server starter. It is not declared
+             again here: the parent BOM does not manage its version, so an explicit declaration
+             would need a hand-maintained version pinned against Spring Security's own. -->
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <!-- docker-java negotiates API version 1.32 by default, which Docker Engine 25
+                             and later refuse outright: their minimum is 1.40. Without this floor,
+                             Testcontainers reports "could not find a valid Docker environment" on a
+                             perfectly working daemon. 1.41 is served by every engine from 20.10 on. -->
+                        <api.version>1.41</api.version>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                    <!-- Layered jars let the Dockerfile cache dependency layers separately. -->
+                    <layers>
+                        <enabled>true</enabled>
+                    </layers>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

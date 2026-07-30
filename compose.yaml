@@ -1,0 +1,45 @@
+# Two services only.
+#
+# Keycloak and the UNICHE Catalogue are already deployed and are consumed as remote services, so they
+# are never run locally. Their URLs come from `.env`; see `.env.example`.
+#
+# There is no object storage service either: the provider is still an open decision, and until it is
+# settled asset bytes live on the filesystem.
+
+name: iguide-authoring-backend
+
+services:
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      # Inside the compose network the database is reached by service name, overriding whatever
+      # localhost value `.env` carries for running the application straight from Maven.
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-iguide}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        # Liquibase runs at application startup, so the database must already be accepting
+        # connections rather than merely be started.
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-iguide}
+      POSTGRES_USER: ${DB_USERNAME:?set DB_USERNAME in .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-iguide} -d ${POSTGRES_DB:-iguide}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

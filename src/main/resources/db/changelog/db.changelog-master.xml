@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.29.xsd">
+
+    <!-- Ordered includes and nothing else. The files correspond one to one with the migration
+         groups in the specification package (`06-database-and-jpa-rules.md` section 15):
+
+           1. integration and Project tenancy
+           2. templates and themes
+           3. assets and localization
+           4. content and spatial entities
+           5. pages and navigation
+           6. audit and analytics
+           7. derived statistics
+
+         Each group is added with the milestone that implements it. Changesets are plain SQL because
+         the schema depends on JSONB columns, composite (project_id, id) unique constraints and the
+         composite foreign keys referencing them, partial indexes, descending index order, and
+         Row-Level Security policies. -->
+
+    <include file="sql/01-integration-and-project-tenancy.sql" relativeToChangelogFile="true"/>
+
+</databaseChangeLog>
