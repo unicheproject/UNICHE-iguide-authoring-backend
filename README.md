@@ -1,5 +1,11 @@
 # UNICHE iGuide Authoring Tool Backend
 
+## Status and where to start
+
+Read [`AGENTS.md`](AGENTS.md) first, then [`PLAN.md`](PLAN.md) for the current work. Verified commands
+are in [`QUICKSTART.md`](QUICKSTART.md); known gaps between this code and the specification are in
+[`GAPS.md`](GAPS.md).
+
 Spring Boot backend for the iGuide UNICHE authoring tool. The authored output is a visitor
 experience application — web, mobile, or kiosk — built from a versioned template.
 
@@ -29,7 +35,7 @@ Both are already deployed and are consumed as remote services. They are never ru
 
 ```text
 Keycloak realm    https://idp.uniche-eccch.eu/realms/uniche
-UNICHE Catalogue  https://platform.uniche-eccch.eu/
+UNICHE Catalogue  https://catalogue.uniche-eccch.eu/
 ```
 
 Token audience is `uniche-platform`. The client obtains tokens directly from Keycloak with
