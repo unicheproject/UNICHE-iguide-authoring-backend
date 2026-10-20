@@ -20,7 +20,11 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Maps every exception that can reach a controller boundary onto the status contract of this API.
@@ -46,7 +50,13 @@ public class GlobalExceptionHandler {
         if (exception.status().is5xxServerError()) {
             log.error("Request failed with {}", exception.status().value(), exception);
         }
-        return respond(exception.status(), exception.type(), exception.getMessage(), exception.errors());
+        Long currentVersion = exception instanceof VersionConflictException conflict
+                ? conflict.currentVersion() : null;
+        List<?> references = exception instanceof ResourceInUseException inUse
+                ? inUse.references() : List.of();
+        return ResponseEntity.status(exception.status()).body(ErrorEnvelope.of(exception.type(),
+                exception.getMessage(), exception.status().value(), exception.errors(), currentVersion,
+                references));
     }
 
     // --- Catalogue failures ----------------------------------------------------------------------
@@ -114,14 +124,32 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ErrorEnvelope> handleOptimisticLocking(OptimisticLockingFailureException exception) {
-        return respond(HttpStatus.CONFLICT, "CONFLICT",
+        // The losing writer of a race that passed the explicit version check; the current version is
+        // unknown here, so the client reloads to learn it.
+        return respond(HttpStatus.CONFLICT, "VERSION_CONFLICT",
                 "The resource changed since it was loaded. Reload and reapply the change.");
+    }
+
+    /**
+     * A multipart upload above the global limit, refused while parsing, before any per-type check
+     * ({@code 10} section 3). The per-type limits are enforced by the upload itself.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorEnvelope> handleUploadTooLarge(MaxUploadSizeExceededException exception) {
+        long limit = exception.getMaxUploadSize();
+        String message = limit > 0 && limit % (1024 * 1024) == 0
+                ? "The file is larger than the " + (limit / (1024 * 1024)) + " MiB global upload limit."
+                : "The file is larger than the global upload limit.";
+        return respond(HttpStatus.PAYLOAD_TOO_LARGE, "ASSET_TOO_LARGE", message,
+                List.of(new ErrorItem("file", "ASSET_TOO_LARGE", message)));
     }
 
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
             MethodArgumentTypeMismatchException.class,
-            MissingServletRequestParameterException.class
+            MissingServletRequestParameterException.class,
+            MissingServletRequestPartException.class,
+            MultipartException.class
     })
     public ResponseEntity<ErrorEnvelope> handleMalformedRequest(Exception exception) {
         // The exception message can quote the offending input, so it is not copied into the body.
@@ -129,8 +157,8 @@ public class GlobalExceptionHandler {
                 "The request could not be parsed.");
     }
 
-    @ExceptionHandler(NoHandlerFoundException.class)
-    public ResponseEntity<ErrorEnvelope> handleNoHandler(NoHandlerFoundException exception) {
+    @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
+    public ResponseEntity<ErrorEnvelope> handleNoHandler(Exception exception) {
         return respond(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "No such endpoint.");
     }
 

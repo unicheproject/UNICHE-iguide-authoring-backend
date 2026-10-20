@@ -30,6 +30,18 @@ class SchemaAndMappingIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void liquibaseCreatedTheLanguageAssetContentAndSpatialTables() throws Exception {
+        assertThat(tableNames()).contains(
+                "project_languages", "places", "place_translations", "geographic_maps",
+                "geographic_map_resources", "floor_plans", "floor_plan_positions", "points_of_interest",
+                "poi_translations", "routes", "route_translations", "route_stops", "route_stop_translations",
+                "guides", "guide_translations", "guide_blocks", "guide_block_translations",
+                "events", "event_translations", "event_occurrences",
+                "categories", "category_translations", "resource_categories",
+                "assets", "asset_translations", "resource_assets", "interaction_triggers");
+    }
+
+    @Test
     void theProjectPrimaryKeyIsNotGeneratedLocally() throws Exception {
         try (Connection connection = dataSource.getConnection();
              var statement = connection.prepareStatement("""

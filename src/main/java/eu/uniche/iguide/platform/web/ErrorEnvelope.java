@@ -15,17 +15,27 @@ import java.util.List;
  * @param status    the HTTP status also present on the response
  * @param requestId the same value the logs carry and the {@code X-Request-Id} response header
  *                  returns, so a caller reporting an error identifies its own log lines
- * @param errors    field-level detail, omitted entirely when there is none
+ * @param errors         field-level detail, omitted entirely when there is none
+ * @param currentVersion on {@code VERSION_CONFLICT} only, the version the caller must reload
+ * @param references     on {@code RESOURCE_IN_USE} only, the rows that still reference the Resource
  */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public record ErrorEnvelope(String type,
                             String title,
                             int status,
                             String requestId,
-                            List<ErrorItem> errors) {
+                            List<ErrorItem> errors,
+                            Long currentVersion,
+                            List<?> references) {
 
     public static ErrorEnvelope of(String type, String title, int status, List<ErrorItem> errors) {
-        return new ErrorEnvelope(type, title, status, CorrelationIdFilter.currentRequestId(), errors);
+        return of(type, title, status, errors, null, List.of());
+    }
+
+    public static ErrorEnvelope of(String type, String title, int status, List<ErrorItem> errors,
+                                   Long currentVersion, List<?> references) {
+        return new ErrorEnvelope(type, title, status, CorrelationIdFilter.currentRequestId(), errors,
+                currentVersion, references);
     }
 
     public static ErrorEnvelope of(String type, String title, int status) {

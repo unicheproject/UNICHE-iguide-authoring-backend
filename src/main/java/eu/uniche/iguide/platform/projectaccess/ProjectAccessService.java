@@ -7,6 +7,8 @@ import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.project.application.ProjectCompanionSyncService;
 import eu.uniche.iguide.project.domain.Project;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -54,7 +56,7 @@ public class ProjectAccessService implements ProjectAccessGateway {
             companionSync.softDelete(projectId);
             throw gone;
         }
-        Project companion = companionSync.upsert(dto);
+        Project companion = synchronize(dto, projectId);
         return new AccessibleProject(
                 companion.getId(),
                 companion.getOrganizationId(),
@@ -65,5 +67,19 @@ public class ProjectAccessService implements ProjectAccessGateway {
                 // Project. The fields stay in the contract for when it does.
                 companion.getCatalogueCreatedAt(),
                 companion.getCatalogueUpdatedAt());
+    }
+
+    /**
+     * A page fires several requests at once, and each one synchronizes the same row. The loser of that
+     * race, an optimistic-lock failure on update or a duplicate key on the first insert, lost nothing:
+     * the winner wrote the same Catalogue answer moments earlier. So the row is re-read rather than the
+     * request failed with a {@code 409} the caller never caused.
+     */
+    private Project synchronize(CatalogueProjectDto dto, UUID projectId) {
+        try {
+            return companionSync.upsert(dto);
+        } catch (OptimisticLockingFailureException | DataIntegrityViolationException concurrentSync) {
+            return companionSync.get(projectId);
+        }
     }
 }
