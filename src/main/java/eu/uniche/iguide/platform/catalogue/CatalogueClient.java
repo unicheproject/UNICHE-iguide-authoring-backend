@@ -33,10 +33,6 @@ public interface CatalogueClient {
 
     CatalogueOrganizationDto getOrganization(UUID organizationId);
 
-    /**
-     * Reads the authorization view of the current subject, conditionally.
-     *
-     * @param etag validator of a previously cached view, or {@code null} for an unconditional read
-     */
-    CatalogueConditionalResponse<CatalogueMeAuthorizationDto> getMeAuthorization(String etag);
+    /** Reads the authorization view of the current subject. */
+    CatalogueMeAuthorizationDto getMeAuthorization();
 }

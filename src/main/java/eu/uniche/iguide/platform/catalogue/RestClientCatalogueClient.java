@@ -12,10 +12,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRequest;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -142,23 +140,11 @@ public class RestClientCatalogueClient implements CatalogueClient {
     }
 
     @Override
-    public CatalogueConditionalResponse<CatalogueMeAuthorizationDto> getMeAuthorization(String etag) {
-        ResponseEntity<CatalogueMeAuthorizationDto> response = call(() -> {
-            var request = restClient.get().uri("/api/v1/me/authorization");
-            if (etag != null) {
-                request = request.header(HttpHeaders.IF_NONE_MATCH, etag);
-            }
-            return request.retrieve().toEntity(CatalogueMeAuthorizationDto.class);
-        });
-        if (response.getStatusCode() == HttpStatus.NOT_MODIFIED) {
-            return CatalogueConditionalResponse.unchanged();
-        }
-        CatalogueMeAuthorizationDto body = response.getBody();
-        if (body == null) {
-            throw new CatalogueBadResponseException(
-                    "The Catalogue returned no body for the current-subject authorization view");
-        }
-        return CatalogueConditionalResponse.changed(body);
+    public CatalogueMeAuthorizationDto getMeAuthorization() {
+        return call(() -> restClient.get()
+                .uri("/api/v1/me/authorization")
+                .retrieve()
+                .body(CatalogueMeAuthorizationDto.class));
     }
 
     /**

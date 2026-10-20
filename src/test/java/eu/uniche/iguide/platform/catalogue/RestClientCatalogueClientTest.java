@@ -161,25 +161,15 @@ class RestClientCatalogueClientTest {
     }
 
     @Test
-    void readsTheAuthorizationViewUnconditionallyWhenNoEtagIsHeld() {
+    void readsTheAuthorizationViewUnconditionallyInTheCataloguesShape() {
         catalogue.willRespond(Response.of(200, authorizationJson()));
 
-        var response = client.getMeAuthorization(null);
+        var view = client.getMeAuthorization();
 
-        assertThat(response.notModified()).isFalse();
-        assertThat(response.body().ttlSeconds()).isEqualTo(60);
+        assertThat(view.managedOrganisations()).containsExactly(ORGANIZATION_ID.toString());
+        assertThat(view.etag()).isEqualTo("\"etag-1\"");
+        assertThat(view.ttlSeconds()).isEqualTo(60L);
         assertThat(catalogue.lastRequest().ifNoneMatch()).isNull();
-    }
-
-    @Test
-    void refreshesTheAuthorizationViewConditionallyAndReportsNotModified() {
-        catalogue.willRespond(Response.status(304));
-
-        var response = client.getMeAuthorization("\"etag-1\"");
-
-        assertThat(response.notModified()).isTrue();
-        assertThat(response.body()).isNull();
-        assertThat(catalogue.lastRequest().ifNoneMatch()).isEqualTo("\"etag-1\"");
     }
 
     /**
@@ -207,7 +197,7 @@ class RestClientCatalogueClientTest {
                 catalogue -> catalogue.listProjectsForOrganization(ORGANIZATION_ID),
                 catalogue -> catalogue.listDeletedProjectsForOrganization(ORGANIZATION_ID),
                 catalogue -> catalogue.getOrganization(ORGANIZATION_ID),
-                catalogue -> catalogue.getMeAuthorization(null));
+                catalogue -> catalogue.getMeAuthorization());
     }
 
     private static CatalogueClient clientFor(String baseUrl, Duration connectTimeout,
