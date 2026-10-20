@@ -238,3 +238,251 @@ Append-only. An entry is never edited or removed; a later entry supersedes it by
 - Why: the owner committed the edits on 2026-10-02.
 - Alternatives: none.
 - Affected specs: `02`, `07`, `08`, `10`, `12`, specs `CLAUDE.md`; Milestone 4 default sort.
+
+## D-017 (2026-10-13) — `/me/authorization` returns the Catalogue body through a typed record
+
+- Type: spec-interpretation
+- Decision: `GET /api/v1/me/authorization` returns `CatalogueMeAuthorizationDto` as the Catalogue sent it:
+  `subject`, `platformAdmin`, `managedOrganisations`, `projectMemberships[{projectId, orgId, role}]`,
+  `etag`, `ttlSeconds`, with the Catalogue's names. Nothing is cached and no `If-None-Match` is sent.
+  The body passes through a typed record rather than as raw bytes, so fields the Catalogue adds later are
+  dropped until the record names them. Supersedes the separate `MeAuthorizationResponse` shape.
+- Why: `02` §10 asks for the Catalogue body unchanged; a typed record keeps a schema in the OpenAPI
+  contract for the CMS's generated client (C0b), which a raw passthrough would reduce to a free-form object.
+- Alternatives: a raw `JsonNode` passthrough (exact, but untyped in the contract).
+- Affected specs: `02` §10, `07` §2.
+
+## D-018 (2026-10-14) — Languages, Places, Maps, and Floor Plans ported from MuseotekBox ahead of order
+
+- Type: implementation
+- Decision: on owner instruction, the Places work built in `UNICHE-museotekbox-authoring-backend` is
+  ported here before M0a, M1b, and M2 are done, with Project Languages (Places need a default language),
+  Geographic Maps, and Floor Plans (PLAN.md M4p). MuseotekBox supplies code; the specs win where they
+  differ: `environment` instead of `setting`; the Place link lives on the map or plan (`placeId`), with
+  no `spatial-link` endpoint; several Floor Plans per Place in `sortOrder`; no floor plan connections;
+  map `visibility` and `visitorFilterEnabled` columns; placements as child collections
+  (`.../maps/{id}/resources`, `.../floor-plans/{id}/positions`); paged lists. `FloorPlan.assetId` is
+  nullable without a foreign key until Assets exist, and a plan without an image cannot be activated.
+  Missing foundations are recorded as gaps (G-022 to G-029), not built.
+- Why: the owner moved backend work to this repository on 2026-10-08 and asked for the existing work to
+  follow, Places first, checked against the specs (2026-10-14).
+- Alternatives: M0a and M1b first (PLAN.md order); Assets first so floor plans keep a required image.
+- Affected specs: `03` §3, §5, §7, §8; `08` Milestones 4 and 5.
+
+## D-019 (2026-10-14) — Interpretations for Places, Maps, Floor Plans, and Languages
+
+- Type: spec-interpretation
+- Decision:
+  - only `DRAFT` Places, maps, and plans are edited, placements included (`422 RESOURCE_NOT_EDITABLE`
+    otherwise), until working copies exist (M8): AGENTS.md §4 rule 13 forbids live edits of `ACTIVE`;
+  - a Place is in use while a non-archived map or plan links it or places it; sub-Places do not block
+    its archival (`03` §1 lists neither them nor POIs); archiving a map or plan clears its `placeId`;
+  - a map placement stores its own `latitude` and `longitude` (`03` §7 names only `presentation`);
+    placement `resource_type` admits `POI` and `PLACE` in the schema, the service only `PLACE`;
+  - a Place's `environment` may change on a `DRAFT` Place only while no map or plan links it;
+  - Place translations are written through the update body, keyed by language code (the conflict paths
+    of `07` §15 name `translations.en.summary`); `translations/{lang}` comes later (G-026);
+  - a Place slug is generated from the default-language title when the request has none, accents
+    dropped, `-2`, `-3` appended on collision; non-Latin titles yield `place`;
+  - `ProjectLanguage.isDefault` is the only record of the default language until ProjectSettings exist
+    (`03` §2–3 store it twice); removing a language disables it and keeps its translations;
+  - maps list by `updatedAt desc`, Places and plans by `sortOrder asc`; reorder writes `sortOrder`
+    without touching `version`.
+- Why: each point is open or silent in the specs (`03` §1, §3, §5, §7; `07` §14), and work proceeds.
+- Alternatives: per point, see the spec references.
+- Affected specs: `03` §1, §3, §5, §7, §8; `07` §14–15; `12` §4.
+
+## D-020 (2026-10-14) — Points of Interest ported from MuseotekBox, and their interpretations
+
+- Type: spec-interpretation
+- Decision: on owner instruction Points of Interest follow Places (PLAN.md M4q), with the spec's
+  `PoiTranslation` only: no `seoTitle`/`seoDescription` (owner decision, QUESTIONS.md Q-012), no
+  `categoryId` or media until Categories and Assets exist (G-029, G-025). Interpretations:
+  - `code` is optional, letters, digits, and single hyphens, at most 32 characters, kept as typed and
+    compared case-sensitively; unique per Project where set (`06` §12); not checked against
+    Interaction Trigger codes, which do not exist yet;
+  - `placeId` points at any non-archived Place of the Project, whatever its `environment` (`03` §6 is
+    silent); a POI inside a Place does not block the Place's archival (as sub-Places, D-019);
+  - a POI is in use while a non-archived map or floor plan places it; Routes, Guides, Events, and
+    Triggers add their references with their milestones;
+  - the list's `q` matches the title in any language or the exact `code` (`13` §3 ranks an exact code
+    first), and `placeId` filters by Place;
+  - placements and positions now accept `POI` as well as `PLACE`.
+- Why: `03` §6 and `07` §14 leave these open; MuseotekBox's choices fit them.
+- Alternatives: a numeric-only code (`13` §2 says "numeric or alphanumeric").
+- Affected specs: `03` §1, §6, §7, §8; `06` §12; `07` §14.
+
+## D-021 (2026-10-15) — Routes ported from MuseotekBox, and their interpretations
+
+- Type: spec-interpretation
+- Decision: on owner instruction Routes and Route Stops follow POIs (PLAN.md M5r), on the spec's model
+  (`03` §9): `travelMode` (not MuseotekBox's `mode`), difficulty `HARD` (not `DEMANDING`), no optional
+  stop flag and no per-stop duration, no SEO texts (Q-012), stops as the child collection of `07` §14.
+  Categories and media wait for G-029 and G-025. Interpretations:
+  - a Point of Interest is at most one stop of a Route (`UNIQUE (project_id, route_id, poi_id)`); the
+    spec is silent and the CMS already prevents it;
+  - stop positions are 0-based and contiguous: a new stop goes last, a removed one closes the gap,
+    `stops:order` takes every stop id; the runtime's 1-based `n` is position + 1;
+  - `distanceMeters` is the author's override and stays null until set; responses also carry
+    `computedDistanceMeters`, the great-circle length through the stops' POI coordinates in order,
+    skipping stops without coordinates, closing the loop when `loop` and three or more points;
+  - a stop's POI must be in the Project and not archived; a DRAFT POI is allowed, but activation needs
+    the default-language title and at least one stop whose POI is ACTIVE (`03` §1);
+  - stops of an ACTIVE Route are not edited until working copies exist (D-019); a stop write updates the
+    Route's `updatedAt`;
+  - nothing refers to a Route until Guides, Events, Navigation, and Triggers exist; a non-archived
+    Route with a stop on a POI blocks that POI's deactivation and archival.
+- Why: `03` §9 and `07` §14 leave these open; MuseotekBox's choices fit them where the spec is silent.
+- Alternatives: stops embedded in the Route update body, as MuseotekBox and the CMS do.
+- Affected specs: `03` §1, §9; `06` §3, §12; `07` §14; `11` §9.
+
+## D-022 (2026-10-15) — Guides on the spec's block model, bridged for the current CMS editor
+
+- Type: spec-interpretation
+- Decision: Guides follow `03` §11 — `GuideTranslation` (title, summary), ordered `GuideBlock`s
+  (`TEXT` or `REFERENCE`) with `GuideBlockTranslation` (text or caption), and the `.../blocks` child
+  collection of `07` §14 — not MuseotekBox's per-language `body` and `GuideItem` list, which the spec
+  supersedes. The owner chose (2026-10-15) to keep the current CMS editor through an adapter: each
+  language's story is the text of one TEXT block placed first, related items are REFERENCE blocks after it.
+  Interpretations:
+  - rich text is a JSON document `{"blocks": [{"type": "paragraph" | "heading", "text", "level"}]}`, the
+    shape the CMS already edits (`03` §11 says "the same format Page components use", which is not yet
+    defined): at most 500 nodes, 20 000 characters each, heading level 2 or 3, empty nodes dropped;
+    `image` nodes are refused until Assets can hold their INLINE bindings (G-025);
+  - REFERENCE targets are POIs, Routes, and Places of the Project that are not archived; Pages and Events
+    are refused until they exist; the same target may appear in several blocks (the spec is silent);
+  - a block keeps its type; TEXT blocks take no caption and REFERENCE blocks no text;
+  - activation needs, in the default language, the title, at least one block, and text on every TEXT block;
+  - a non-archived Guide referencing a POI, Route, or Place blocks that Resource's deactivation and
+    archival; nothing refers to a Guide until Navigation and Triggers exist;
+  - no SEO texts on Guides (Q-012).
+- Why: owner decision on the model; the remaining points are open in `03` §11 and `07` §14.
+- Alternatives: MuseotekBox's model as is; a block editor in the CMS now.
+- Affected specs: `03` §1, §4, §11; `07` §14; `12` §3.
+
+## D-023 (2026-10-15) — Events ported from MuseotekBox, and their interpretations
+
+- Type: spec-interpretation
+- Decision: on owner instruction Events follow Guides (PLAN.md M9e), on `03` §15: Event, EventTranslation
+  (title, summary, description, locationText), and EventOccurrence (`startsAt`, `endsAt` instants,
+  `SCHEDULED` | `CANCELLED`), with occurrences as the child collection `.../events/{id}/occurrences` of
+  `07` §14 rather than part of the Event body as in MuseotekBox; the CMS adapter syncs them. Interpretations:
+  - the tables live in migration group 4 (`06` §15 names no group for Events);
+  - links to a Place, POI, or Route are optional, must be in the Project, and not archived; a
+    non-archived Event keeps them in use (`03` §1); Guides may reference Events, which keeps the Event in use;
+  - an occurrence ends after it starts and lasts at most 366 days; at most 500 per Event; occurrences are
+    ordered by `startsAt`, so their collection has no `:order` (`07` §14 lists none for them);
+  - activation needs only the default-language title; an Event without occurrences may be ACTIVE;
+  - the booking URL, when set, is an http or https address with a host, at most 2048 characters;
+  - calendar queries (`08` Milestone 9) are `GET .../events/occurrences?from&to`, at most 400 days,
+    returning the overlapping occurrences of every Event of the Project in start order;
+  - "every occurrence of a non-archived Event" (`11` §3) is read as of every ACTIVE Event, as `03` §15
+    and `03` §1 say, for the manifest of Milestone 8;
+  - no timezone is stored and the `EVENTS` capability is not checked until ProjectSettings exist (G-024).
+- Why: `03` §15 and `07` §14 leave these open; MuseotekBox's limits fit them.
+- Alternatives: occurrences in the Event update body, as MuseotekBox and the CMS do.
+- Affected specs: `03` §1, §15; `06` §15; `07` §14; `08` Milestone 9; `11` §3.
+
+## D-024 (2026-10-15) — Categories ported from MuseotekBox, on the spec's ResourceCategory rows
+
+- Type: spec-interpretation
+- Decision: on owner instruction Categories follow Events (PLAN.md M4c), on `03` §10: Category (scope
+  `POI` | `ROUTE`, two levels, `code`, `icon`), CategoryTranslation (name, description), and
+  `ResourceCategory` rows managed at `.../pois/{id}/categories` and `.../routes/{id}/categories` (`07`
+  §14), not MuseotekBox's `categoryId` column; the CMS adapter maps its single select onto them.
+  Interpretations:
+  - a Point of Interest or Route is in at most one Category (`UNIQUE (project_id, resource_type,
+    resource_id)`): `03` §9 and `12` §3 say "the Category", although the row model would allow more;
+    a second binding is `409 DUPLICATE_VALUE`;
+  - Categories carry `sort_order`, which `03` §10 omits although `06` §16 and `07` §14 sort and reorder
+    them by it (Q-013);
+  - `icon` is one of the 20 keys the CMS draws (monument, building, statue, vase, church, castle, tree,
+    mountain, beach, view, food, shop, info, photo, water, harbour, factory, trail, family, bike); the
+    spec names no keys (Q-013);
+  - `code` follows the slug format, is unique per Project, and is generated from the name when absent;
+  - the parent is a top-level Category of the same scope, in the Project, not archived; a Category with
+    subcategories stays top-level; a scope change is refused while Resources are bound, and moves the
+    subcategories along;
+  - activation needs the default-language name and an ACTIVE parent; restore needs a parent that is not
+    archived; deactivation and archival are refused while non-archived subcategories or non-archived
+    bound POIs or Routes exist; map `hiddenCategoryIds` are not references (`03` §1 does not list them);
+  - a binding needs a Category of the Resource's scope that is not archived, and a DRAFT Resource
+    (working copies, D-019); POI and Route reads carry `categoryIds`, as the manifest will (`11` §3);
+  - map `visibility.POI.hiddenCategoryIds` holds POI Categories and `ROUTE` Route Categories of the Project.
+- Why: `03` §10 and `07` §14 leave these open or contradict each other; MuseotekBox's rules fit them.
+- Alternatives: several Categories per Resource; a `categoryId` column as in MuseotekBox.
+- Affected specs: `03` §1, §7, §9, §10; `06` §12, §16; `07` §14; `11` §3; `12` §3.
+
+## D-025 (2026-10-16) — Assets ported from MuseotekBox, MinIO in the local composition, and media bindings
+
+- Type: spec-interpretation and owner decision (MinIO, 2026-10-16)
+- Decision: on owner instruction media follows Categories (PLAN.md M3), on `03` §4 and `07` §10:
+  Asset, AssetTranslation (title, caption, alternativeText, credits, transcript, provenance), and
+  `ResourceAsset` bindings managed at `.../{pois|routes|guides|events}/{id}/resource-assets` and
+  `.../resource-assets:order` (`07` §14). Bytes go to S3-compatible storage through MuseotekBox's
+  `S3AssetStorage` (path-style, bucket head request at startup, 15-minute signed URLs). Interpretations:
+  - the owner chose a MinIO service in `compose.yaml` for development although `10` §7 says the local
+    composition ships no storage service; the official images are no longer published, so it is
+    Bitnami's frozen MinIO build (`bitnamilegacy/minio`), which creates the private bucket itself;
+  - `iguide.assets.s3.public-endpoint` (optional, not in the `10` §3 contract) names the host signed URLs
+    are made for, because inside compose the application reaches MinIO at `minio:9000` and the browser at
+    `localhost:9000` (Q-014);
+  - endpoints beyond `07` §14, ported from MuseotekBox because the CMS uses them: `POST .../assets/{id}/file`
+    (replace the file of a DRAFT Asset with one of the same type), `GET .../assets/{id}/usages` (where
+    used, with the role in each Resource, `FLOOR_PLAN_IMAGE` for a plan), `GET .../assets/{id}/download`
+    (a signed link with `Content-Disposition: attachment`) (Q-014); `PUT .../assets/{id}/translations/{lang}`
+    is not offered, the Asset `PUT` carries the texts by language as the other kinds do;
+  - an ACTIVE Asset stays editable in place (name, decorative flag, texts), unlike D-019: it is usually
+    used by ACTIVE content, which blocks its deactivation, so missing alternative text could not be fixed
+    until working copies exist; it keeps its default-language alternative text; only ARCHIVED is read-only;
+  - the type follows the MIME type, then the extension; an upload may only ask for `FLOOR_PLAN`, for an
+    image; activating a non-decorative IMAGE needs default-language `alternativeText`;
+  - usages are `03` §4's examples plus `VIDEO` (the CMS video slot): one binding per Resource, usage, and
+    language for HERO_IMAGE, THUMBNAIL, VIDEO, AUDIO_NARRATION, MODEL, MODEL_POSTER; accepted types as
+    MuseotekBox (images for HERO, THUMBNAIL, GALLERY, MODEL_POSTER, INLINE; DOCUMENT or OTHER for
+    ATTACHMENT); "a MODEL binding also binds a MODEL_POSTER" is enforced at bind time: the poster first,
+    and it cannot be removed while the model is bound;
+  - rich text embeds `{"type": "asset", "assetId"}` (`03` §4), replacing D-022's refused `image` node;
+    every block write reconciles the Guide's INLINE rows over all its TEXT blocks and languages; INLINE
+    rows are never posted, deleted, or ordered directly (`:order` lists the other bindings, INLINE rows
+    stay after them);
+  - bindings and their order change only on a DRAFT Resource (D-019); the Asset must be in the Project and
+    not archived; Places, maps, and Floor Plans bind no media, a Floor Plan names its image directly
+    (`IMAGE` or `FLOOR_PLAN`, not archived, its pixel size filling `width`/`height` when not sent);
+  - a non-archived binding Resource or Floor Plan keeps an Asset in use (`RESOURCE_IN_USE`); POI, Route,
+    Guide, and Event reads carry `media` in `sortOrder`, INLINE rows included;
+  - upload limits are the `10` §3 values, `GET /api/v1/upload-limits` returns
+    `{maxUploadBytes, perType}`; an upload above a limit is `413 ASSET_TOO_LARGE` naming the limit.
+- Why: owner decision on local storage; `03` §4 and `07` §10, §14 leave the rest open.
+- Alternatives: a development bucket from the owner (`10` §7 as written); the CMS's s3mock.
+- Affected specs: `03` §1, §4, §8, §11; `07` §10, §14; `10` §3, §7; `12` §3.
+
+## D-026 (2026-10-19) — Interaction Triggers for Points of Interest
+
+- Type: spec-interpretation and owner decisions (2026-10-19)
+- Decision: on owner instruction the "How visitors reach it" card of the POI editor gets a backend, on
+  `03` §14: `interaction_triggers` (changeset 0032) and `.../triggers` endpoints of `07` §14 (list by
+  target and status, get, create, update, status, `qr.png`). Interpretations:
+  - authorable types are `QR_CODE`, `BEACON`, and `GEO_PROXIMITY` (owner); `MANUAL` needs no row because
+    every Resource is reachable by browsing, and `CAMERA_RECOGNITION` is deferred (`08` deferred list),
+    both `422 UNSUPPORTED_TYPE`; the CMS shows "AR scan target" greyed with that reason;
+  - a `BEACON` is an iBeacon `uuid` / `major` / `minor` (owner; `09` §11 leaves the format open, Q-015)
+    with `proximityMeters` (0.5–50, default 2) and `cooldownSeconds` (0–86400, default 300); the same
+    identity twice among the Project's non-archived beacons is `409`;
+  - a `GEO_PROXIMITY` area is `latitude`, `longitude`, `radiusMeters` (5–5000), and `cooldownSeconds`;
+  - a `QR_CODE` code is Latin letters, digits, and single hyphens, at most 64, generated (8 characters)
+    when absent, unique per Project including archived triggers so a printed code never changes target;
+    only `QR_CODE` has a code; unknown configuration keys are refused;
+  - `supportedSurfaces` is null or a subset of the surfaces able to run the type (`13` §1);
+  - targets are Points of Interest of the Project that are not archived; other kinds follow with their
+    editors; the type and target never change;
+  - a trigger is edited in place while not archived, like an Asset (D-025): it is a mechanism of its
+    target, whose own DRAFT rule still guards the editor; the CMS creates triggers and activates them at
+    once and archives removed ones, so `?t=` keeps resolving (`11` §9);
+  - a non-archived trigger keeps its POI in use (`03` §1 lists InteractionTrigger targets);
+  - `qr.png` is `422 NO_PUBLIC_BASE_URL` until the `WEB` surface's `publicBaseUrl` exists (owner: code now,
+    image later), as `07` §14 prescribes for a missing address;
+  - triggers carry `sort_order`, the order in their target's editor (`03` §14 has none).
+- Why: `03` §14, `09` §11, and `12` §3 leave these open; owner choices on types, beacon format, and QR.
+- Alternatives: a free-text beacon identifier; a temporary public address for QR images.
+- Affected specs: `03` §1, §14; `07` §14; `08` Milestone 5; `09` §11; `11` §9; `12` §3; `13` §1.

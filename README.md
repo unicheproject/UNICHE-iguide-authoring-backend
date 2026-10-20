@@ -49,16 +49,20 @@ docker compose up --build
 curl -i localhost:8080/iguide/actuator/health
 ```
 
-Two containers only: this application and PostgreSQL. Liquibase runs at application startup.
+Three containers: this application, PostgreSQL, and MinIO, an S3-compatible store for asset bytes
+(DECISIONS.md D-025). MinIO creates the private bucket `iguide-assets` at startup; its console is at
+`http://localhost:9001`. Liquibase runs at application startup.
 
-Without Docker, provide a PostgreSQL instance and run:
+Without Docker, provide a PostgreSQL instance and an S3-compatible bucket (the `ASSETS_S3_*` variables)
+and run:
 
 ```bash
 export $(grep -v '^#' .env | xargs)
 ./mvnw spring-boot:run
 ```
 
-The application refuses to start without an explicit `IDP_ISSUER_URI` and `CATALOGUE_BASE_URL`.
+The application refuses to start without an explicit `IDP_ISSUER_URI` and `CATALOGUE_BASE_URL`, and
+without a reachable asset bucket.
 
 ## Testing
 

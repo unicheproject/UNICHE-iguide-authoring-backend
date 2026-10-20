@@ -8,6 +8,48 @@ Keycloak and Catalogue. Frontend counterpart: `../uniche_iguide_frontend/PLAN.md
 
 ## Now
 
+### M5t — Interaction Triggers on Points of Interest
+
+- Owner-instructed after M3; interpretations in DECISIONS.md D-026; spec question QUESTIONS.md Q-015.
+- Status: backend code and tests green (TRACEABILITY.md R12); the CMS POI editor has the "How visitors
+  reach it" card. Open: QR image and capabilities, other targets (G-033).
+
+### M3 — Assets, S3 storage, and media bindings
+
+- Owner-instructed after M4c; interpretations in DECISIONS.md D-025; spec questions in QUESTIONS.md Q-014.
+- Status: backend code and tests green (TRACEABILITY.md R11); MinIO in the local composition; the CMS
+  adapters use the endpoints. Open: provenance warnings, runtime delivery, duration measurement, storage
+  cleanup (G-032).
+
+### M9e — Events and Event Occurrences
+
+- Owner-instructed after M4g; interpretations in DECISIONS.md D-023.
+- Status: backend code and tests green (TRACEABILITY.md R9). Open: the Project timezone and the `EVENTS`
+  capability (G-024), event media (G-025), the CMS events calendar (C6).
+
+### M4c — Categories and Resource categories
+
+- Owner-instructed after M9e; interpretations in DECISIONS.md D-024; spec questions in QUESTIONS.md Q-013.
+- Status: backend code and tests green (TRACEABILITY.md R10). Open: a `categoryId` list filter on POIs and
+  Routes (the CMS filters client-side), Template seeding of `initialCategories` (M2).
+
+### M1a — Remove identity and organization snapshots and the `/me` cache
+
+- Outcome: no local identity or organization table; `/me/authorization` is an uncached passthrough.
+- Spec refs: `02` §5, §6, §10; `07` §3, §7; `10` §5; specs `CLAUDE.md` inv. 4.
+- Closes: G-005, G-006, G-018. G-007 closed 2026-10-13 (`/me/authorization` passthrough, D-017).
+- Depends on: nothing (parallel to M0a).
+- Non-goals: RLS; changes to the Project companion row.
+- Acceptance:
+  - a new changeset drops `identity_snapshots` and `catalogue_organization_snapshots`; changesets
+    0003 and 0004 stay unedited; Liquibase applies cleanly on an empty database and on one with the
+    old tables;
+  - no request writes any row other than the Project companion;
+  - `GET /api/v1/me/authorization` calls the Catalogue on every request and returns its body;
+  - no project endpoint succeeds without a valid Keycloak token.
+
+## Next
+
 ### M0a — Platform error model, correlation, split CORS, OpenAPI contract
 
 - Outcome: errors are RFC 7807 with `code`, URN `type`, `requestId`; `X-UNICHE-Request-Id` on every
@@ -26,38 +68,12 @@ Keycloak and Catalogue. Frontend counterpart: `../uniche_iguide_frontend/PLAN.md
     credentials; a request to `/api/v1` from an unlisted origin does not;
   - `openapi/openapi.yaml` is committed; a test fails when the generated document differs from it.
 
-### M1a — Remove identity and organization snapshots and the `/me` cache
-
-- Outcome: no local identity or organization table; `/me/authorization` is an uncached passthrough.
-- Spec refs: `02` §5, §6, §10; `07` §3, §7; `10` §5; specs `CLAUDE.md` inv. 4.
-- Closes: G-005, G-006, G-007, G-018.
-- Depends on: nothing (parallel to M0a).
-- Non-goals: RLS; changes to the Project companion row.
-- Acceptance:
-  - a new changeset drops `identity_snapshots` and `catalogue_organization_snapshots`; changesets
-    0003 and 0004 stay unedited; Liquibase applies cleanly on an empty database and on one with the
-    old tables;
-  - no request writes any row other than the Project companion;
-  - `GET /api/v1/me/authorization` calls the Catalogue on every request and returns its body;
-  - no project endpoint succeeds without a valid Keycloak token.
-
 ### M1c — Tool scoping and the organizations passthrough
 
-- Outcome: only Projects whose Catalogue `tool.slug` equals `uniche.tool.slug` exist for this backend;
-  `GET /api/v1/organizations` names the caller's organizations for the picker.
-- Spec refs: `02` §2, §11, §12; `07` §6, §14; `08` Milestone 1; DECISIONS.md D-009, D-014.
-- Closes: G-008, G-016, G-017, G-021.
-- Depends on: nothing.
-- Non-goals: a tool-scoped Catalogue endpoint; the reconcile sweep (out of scope, `README`).
-- Acceptance:
-  - a Catalogue `200` for a Project of another tool returns `404` and writes no companion row;
-  - organization listings and deleted listings return only `iguide` Projects;
-  - valid token without Catalogue access receives `404`; local Project presence never grants access;
-  - `createdAt` and `updatedAt` from the Catalogue reach the companion row;
-  - local slug validation matches the Catalogue rule;
-  - `GET /api/v1/organizations` returns the Catalogue body and writes nothing locally.
-
-## Next
+- Spec refs: `02` §2, §11, §12; `07` §6, §14; `08` Milestone 1; D-009, D-014. Closes G-008, G-016, G-017, G-021.
+- Acceptance: a Catalogue `200` for another tool's Project returns `404` and writes no companion row;
+  organization and deleted listings return only `iguide` Projects; `createdAt`/`updatedAt` reach the
+  companion row; local slug validation matches the Catalogue; `GET /api/v1/organizations` passes through.
 
 ### M0c — Local composition
 

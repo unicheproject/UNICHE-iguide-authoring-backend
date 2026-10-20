@@ -59,15 +59,6 @@ Keycloak and the Catalogue).
 - Consequence: a second organization source; an extra Catalogue call on create.
 - Closed by: M1a drop changeset; create makes one Catalogue call.
 
-### G-007 — `/me/authorization` is cached and reshaped
-
-- Found: `MeAuthorizationQuery` caches per subject (not issuer) for the Catalogue TTL with
-  `If-None-Match`; `MeAuthorizationResponse` renames `managedOrganisations` to `managedOrganizations` and
-  drops `etag` and `ttlSeconds`.
-- Spec: `02` §10 (uncached passthrough, Catalogue body unchanged).
-- Consequence: stale authorization view up to 45 s after a membership change.
-- Closed by: M1a test that two requests make two Catalogue calls and the body is the Catalogue body.
-
 ### G-008 — No tool scoping
 
 - Found: `ProjectAccessService` accepts any Catalogue `200`; `ListOrganizationProjectsPassthroughQuery`
@@ -169,10 +160,120 @@ Keycloak and the Catalogue).
 - Spec: `02` §11, `07` §14, `12` §7 (amended 2026-10-02, D-014).
 - Closed by: M1c test that the endpoint relays the Catalogue body and touches no local state.
 
+### G-032 — Assets: runtime delivery, processing, and the rest of Milestone 3
+
+- Found (M3, 2026-10-16):
+  - no `GET /runtime/v1/projects/{p}/assets/{id}` redirect (`11` §2), since the runtime API does not exist
+    (Milestone 8);
+  - no `AI_OUTPUT_UNREVIEWED` warning or `CONTENT_REVIEWED` action on `provenance` (`08` Milestone 3);
+    the column exists on every translation table but nothing writes or reads it;
+  - `durationSeconds` is never measured for audio and video; no virus scanning, transcoding, or resumable
+    upload (`09` §2); objects of replaced files and of failed metadata writes are never cleaned up;
+  - no theme references to Assets (Milestone 2), so an Asset used by a theme is not kept in use;
+  - an ACTIVE Resource cannot change its media until working copies exist (G-027).
+- Closed by: Milestones 2, 8, and 13, and a storage cleanup job.
+
+### G-033 — Triggers: QR image, capabilities, list chips, other targets
+
+- Found (M5t, 2026-10-19):
+  - `GET .../triggers/{id}/qr.png` always answers `422 NO_PUBLIC_BASE_URL`: the `WEB` surface's
+    `publicBaseUrl` does not exist (Milestone 2), and no QR image library is wired;
+  - the `QR_TRIGGERS` and `LOCATION_TRIGGERS` capabilities are not checked (G-024);
+  - triggers target Points of Interest only; Places, Routes, Guides, Events, and Pages follow;
+  - trigger changes append no Audit Event (G-023) and are not in a manifest (Milestone 8).
+- Closed by: Milestones 2, 7, 8, and the editors of the other kinds.
+
 ## Closed
+
+### G-007 — `/me/authorization` is cached and reshaped
+
+- Found: `MeAuthorizationQuery` caches per subject (not issuer) for the Catalogue TTL with
+  `If-None-Match`; `MeAuthorizationResponse` renames `managedOrganisations` to `managedOrganizations` and
+  drops `etag` and `ttlSeconds`.
+- Spec: `02` §10 (uncached passthrough, Catalogue body unchanged).
+- Consequence: stale authorization view up to 45 s after a membership change.
+- Closed 2026-10-13 (M1a, `/me/authorization` part): `MeAuthorizationPassthroughQuery` calls the
+  Catalogue on every request and the endpoint returns the Catalogue's fields and names
+  (DECISIONS.md D-017). Evidence: TRACEABILITY.md R4, `MeAuthorizationIntegrationTest`
+  (`asksTheCatalogueOnEveryRequest`, `returnsTheCatalogueBodyInTheCataloguesShape`). Found by the CMS:
+  sign-in crashed on `authorization.managedOrganisations is not iterable` (frontend GAPS.md G-017).
 
 ### G-014 — Dockerfile entrypoint differs from `10` §6 item 5
 
 - Found: `ENTRYPOINT ["java", "-jar", "application.jar"]`, not `JarLauncher` (DECISIONS.md D-006).
 - Consequence: none at run time; the spec text is wrong for Boot 3.4 extraction. QUESTIONS.md Q-007.
 - Closed 2026-10-02 by DECISIONS.md D-014: `10` §6 item 5 now names the `java -jar` entrypoint.
+
+### G-022 — No Row-Level Security on the content and spatial tables
+
+- Found: `project_languages`, `places`, `place_translations`, `geographic_maps`,
+  `geographic_map_resources`, `floor_plans`, `floor_plan_positions` have no policy (`06` §13).
+- Consequence: isolation rests on Project-scoped queries and composite foreign keys only.
+- Closed by: M1b, adding a policy per table in a new changeset.
+
+### G-023 — Content writes append no Audit Event
+
+- Found: create, update, status, reorder, and placement writes record only `updated_by_subject`.
+- Spec: `05` §3 (`RESOURCE_CREATED`, `RESOURCE_UPDATED`, ..., `RESOURCE_REORDERED`, `LANGUAGE_ADDED`).
+- Closed by: Milestone 7.
+
+### G-024 — No ProjectSettings and no `contentRevision`
+
+- Found: the default language lives only in `project_languages.is_default` (DECISIONS.md D-019); no
+  runtime-visible change increments `contentRevision`; there is no Project timezone to render event
+  occurrences in and no `featureConfiguration`, so the `EVENTS` capability is never checked (D-023).
+- Spec: `03` §2, `11` §4. Closed by: M2 (settings) and M8 (revision upkeep).
+
+### G-025 — Floor Plan image is not an Asset
+
+- Found: `floor_plans.asset_id` is nullable, has no foreign key, and is never checked (DECISIONS.md D-018).
+- Spec: `03` §8 (`assetId`), `07` §14 (Asset references list Floor Plans).
+- Closed by: Milestone 3, with a changeset adding the foreign key and the `IMAGE`/`FLOOR_PLAN` check.
+- Closed 2026-10-16 (M3): changeset 0031 adds the composite foreign key; a plan's image must be an
+  `IMAGE` or `FLOOR_PLAN` Asset of the Project that is not archived and keeps it in use (DECISIONS.md
+  D-025). Evidence: TRACEABILITY.md R11, `AssetIntegrationTest.aFloorPlanImageIsCheckedAndKeepsTheAssetInUse`,
+  `FloorPlanIntegrationTest.activationNeedsAnImage`.
+
+### G-026 — Generic Resource endpoints missing for Places, Maps, and Floor Plans
+
+- Found: no `translations/{lang}`, `resource-assets`, `categories`, child `:order` endpoints; no
+  `pending`, `language`, or `sort` list parameters.
+- Spec: `07` §14. Closed by: Milestones 3, 4, and 8 as their entities land.
+
+### G-027 — No working copies
+
+- Found: `ACTIVE` Places, maps, and plans are not editable; `hasWorkingCopy` is always `false`.
+- Spec: `03` §1, `06` §17, `07` §14. Closed by: Milestone 8.
+
+### G-028 — Points of Interest do not exist
+
+- Found: placements accept only `PLACE`; no POI counts toward a Place's references.
+- Spec: `03` §6, §7, §8. Closed by: Milestone 4 (POIs).
+- Closed 2026-10-14 (M4q): POIs exist and can be placed on maps and floor plans (DECISIONS.md D-020).
+  Evidence: TRACEABILITY.md R6, `PoiIntegrationTest`. Still open elsewhere: Routes, Guides, Events,
+  and Triggers as referrers (their milestones), POI Categories (G-029), POI media (G-025).
+
+### G-029 — Categories do not exist
+
+- Found: map `visibility.*.hiddenCategoryIds` must be empty (`422` otherwise).
+- Spec: `03` §7, §10. Closed by: Milestone 4 (Categories).
+- Closed 2026-10-15 (M4c): Categories, ResourceCategory bindings for POIs and Routes, and map hidden
+  Categories validated by scope (DECISIONS.md D-024). Evidence: TRACEABILITY.md R10, `CategoryIntegrationTest`.
+
+### G-030 — No readiness codes for Routes
+
+- Found: `03` §1 makes "at least one Route Stop whose Point of Interest is `ACTIVE`" a required field and
+  "a Route with fewer than two stops" a warning, but the closed code lists of `07` §14 have no code for
+  either. Activation enforces the first as `MISSING_REQUIRED_FIELDS` at path `stops`; the readiness
+  endpoint does not exist yet.
+- Consequence: the readiness response (Milestone 8) cannot report these without a spec code.
+- Closed by: a QUESTIONS.md spec-change-request with the readiness milestone.
+
+### G-031 — Rich text cannot embed images
+
+- Found: Guide TEXT blocks refuse `image` nodes (DECISIONS.md D-022), because their Assets would need
+  `INLINE` bindings (`03` §4, `07` §14) and Assets do not exist (G-025).
+- Closed by: Milestone 3, extracting `assetId`s on every save into `INLINE` `ResourceAsset` rows.
+- Closed 2026-10-16 (M3): TEXT blocks take `asset` nodes; every block write reconciles the Guide's INLINE
+  rows (DECISIONS.md D-025). Evidence: TRACEABILITY.md R11,
+  `ResourceAssetIntegrationTest.imagesInGuideTextBecomeInlineBindingsThatFollowEverySave`.

@@ -131,6 +131,56 @@ None open. Q-002 and Q-003 were resolved on 2026-10-02 and are kept here for ref
   The confidential `iguide-svc` client of `10` §3 is needed only from Milestone 12.
 - Assumption taken: local development only. Blocks nothing in the backend; C0 deployment needs it.
 
+### Q-012 — SEO title and description on Points of Interest
+
+- Kind: spec-change-request
+- Source: `03` §6 (`PoiTranslation`), `12` §3.
+- Finding: the CMS POI editor, built on the 2026-10-01 mockup, has "Search and sharing" fields `seoTitle`
+  and `seoDescription` per language; `PoiTranslation` in `03` §6 has neither, so this backend does not
+  store them (owner decision 2026-10-14, DECISIONS.md D-020) and the CMS refuses to save them.
+- Quoted: "PoiTranslation: id, projectId, poiId, languageCode, title, summary, description,
+  instructions, accessibilityInformation".
+- Proposed: add `seoTitle` and `seoDescription` (nullable, text) to `PoiTranslation`, with their use by
+  the runtime (`11` §3 or a page head rule), or drop the fields from the CMS mockup.
+- Assumption taken: not stored until the spec decides. The same applies to `RouteTranslation` (`03` §9),
+  whose CMS editor has the same two fields (DECISIONS.md D-021), and to Guides (D-022).
+
+### Q-013 — Category order, icon keys, and how many Categories a Resource has
+
+- Kind: spec-change-request
+- Source: `03` §9, §10; `06` §16; `07` §14; `11` §3; `12` §3.
+- Finding: `03` §10 gives Category no `sortOrder`, yet `06` §16 and `07` §14 sort Categories by it and
+  give them `:order`; "a key of the platform icon set" names no keys; `ResourceCategory` rows and the
+  manifest's `categoryIds` allow several Categories per Resource while `03` §9 and `12` §3 say "the
+  Category".
+- Proposed: add `sortOrder` to Category in `03` §10; list the icon keys (the 20 of DECISIONS.md D-024);
+  state that a Point of Interest or Route has at most one Category.
+- Assumption taken: all three as proposed (D-024).
+
+### Q-014 — Asset endpoints, the signing host, and the VIDEO usage
+
+- Kind: spec-change-request
+- Source: `03` §4; `07` §10, §14; `10` §3, §7; `12` §3.
+- Finding: the CMS media library replaces a file, lists where an Asset is used with its role, and
+  downloads under the original name, none of which `07` §14 offers; signed URLs must name a host the
+  browser reaches, which differs from the backend's endpoint whenever the two sit on different networks
+  (any container setup); `03` §4 has no `VIDEO` usage although `12` gives Points of Interest a video.
+- Proposed: add `POST .../assets/{id}/file`, `GET .../assets/{id}/usages`, and
+  `GET .../assets/{id}/download` to `07` §14; add an optional `iguide.assets.s3.public-endpoint` to the
+  `10` §3 contract; add `VIDEO` to the `03` §4 usages; allow a storage service in the local composition
+  (`10` §7).
+- Assumption taken: all as proposed (D-025).
+
+### Q-015 — Beacon identifier format
+
+- Kind: spec-change-request
+- Source: `03` §14; `09` §11.
+- Finding: `09` §11 leaves "the beacon identifier format stored in `InteractionTrigger.configuration`"
+  open, yet the CMS must store something now.
+- Proposed: iBeacon `uuid`, `major` (0–65535), `minor` (0–65535), with `proximityMeters` and
+  `cooldownSeconds` (`03` §14 asks for a proximity threshold and a cooldown); one identity per Project.
+- Assumption taken: as proposed (D-026).
+
 ### Open decisions of `09` that shape the next milestones
 
 | `09` | Shapes or blocks |
