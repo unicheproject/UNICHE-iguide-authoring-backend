@@ -29,7 +29,21 @@
         <!-- Overrides the parent BOM: the managed 1.20.6 cannot negotiate an API version with
              Docker Engine 29, which no longer serves the old ones it asks for. -->
         <testcontainers.version>1.21.3</testcontainers.version>
+        <!-- Outside the Spring Boot BOM: the S3 client for asset storage (`07` section 10). -->
+        <awssdk.version>2.46.7</awssdk.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>${awssdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>
@@ -58,6 +72,11 @@
         </dependency>
 
         <!-- Liquibase owns the schema. Hibernate never modifies it. -->
+        <!-- Asset storage: any S3-compatible object store (`10` section 7). -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.liquibase</groupId>
             <artifactId>liquibase-core</artifactId>
