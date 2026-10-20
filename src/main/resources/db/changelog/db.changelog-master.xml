@@ -13,8 +13,10 @@
            3. assets and localization
            4. content and spatial entities
            5. pages and navigation
-           6. audit and analytics
-           7. derived statistics
+           6. audit
+           7. deployment packages
+           8. working copies
+           9. ICAgent ingestion outbox
 
          Each group is added with the milestone that implements it. Changesets are plain SQL because
          the schema depends on JSONB columns, composite (project_id, id) unique constraints and the
@@ -22,5 +24,7 @@
          Row-Level Security policies. -->
 
     <include file="sql/01-integration-and-project-tenancy.sql" relativeToChangelogFile="true"/>
+    <include file="sql/03-assets-and-localization.sql" relativeToChangelogFile="true"/>
+    <include file="sql/04-content-and-spatial-entities.sql" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>
