@@ -8,6 +8,7 @@ import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.platform.web.DuplicateValueException;
 import eu.uniche.iguide.platform.web.ErrorItem;
 import eu.uniche.iguide.platform.web.ResourceNotFoundException;
+import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
 import java.util.ArrayList;
@@ -18,8 +19,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The Category of a Point of Interest or Route ({@code 07} section 14: {@code .../{kind}/{id}/categories},
- * {@code .../categories/{bindingId}}). A Resource is in at most one Category (DECISIONS.md D-024); only a
- * DRAFT Resource changes it until working copies exist.
+ * {@code .../categories/{bindingId}}). A Resource is in at most one Category (DECISIONS.md D-024). These
+ * endpoints change the Category of a DRAFT Resource; an ACTIVE one changes it through its working copy, which
+ * calls {@link #replace} on apply (DECISIONS.md D-027).
  */
 @Service
 public class ResourceCategoryUseCase {
@@ -66,6 +68,34 @@ public class ResourceCategoryUseCase {
             bindings.delete(bindings.findByProjectIdAndResourceTypeAndResourceIdAndId(projectId, kind, resourceId,
                     bindingId).orElseThrow(() -> new ResourceNotFoundException("No such category binding.")));
         });
+    }
+
+    /**
+     * Makes the Resource's Category exactly {@code categoryIds} (none or one), inside the caller's transaction
+     * and without a status check: the apply of a working copy. Errors are reported at {@code categoryIds}.
+     */
+    public void replace(UUID projectId, CategoryScope kind, UUID resourceId, List<UUID> categoryIds) {
+        List<UUID> wanted = categoryIds == null ? List.of() : categoryIds;
+        if (wanted.size() > 1) {
+            throw new ValidationFailedException("A " + kindName(kind) + " is in at most one category.",
+                    List.of(new ErrorItem("categoryIds", "TOO_MANY", "Choose at most one category.")));
+        }
+        List<ResourceCategory> current = bindings.findByProjectIdAndResourceTypeAndResourceId(projectId, kind,
+                resourceId);
+        if (wanted.isEmpty() ? current.isEmpty()
+                : current.size() == 1 && current.getFirst().getCategoryId().equals(wanted.getFirst())) {
+            return;
+        }
+        bindings.deleteAll(current);
+        bindings.flush();
+        if (!wanted.isEmpty()) {
+            List<ErrorItem> errors = new ArrayList<>();
+            rules.checkAssignable(projectId, wanted.getFirst(), kind, errors);
+            ResourceRules.throwIfAny(errors.stream()
+                    .map(e -> new ErrorItem("categoryIds[0]", e.code(), e.message())).toList(),
+                    "The category cannot be assigned.");
+            bindings.saveAndFlush(ResourceCategory.of(projectId, wanted.getFirst(), kind, resourceId));
+        }
     }
 
     private ResourceStatus requireResource(UUID projectId, CategoryScope kind, UUID resourceId) {

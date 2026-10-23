@@ -11,6 +11,8 @@ import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Applies one lifecycle transition ({@code 03} section 1). Activation needs the default-language name and
  * an ACTIVE parent; restoring needs a parent that is not archived. Deactivation and archival are refused
  * with {@code RESOURCE_IN_USE} while subcategories or Points of Interest or Routes are in the Category.
+ * Leaving ACTIVE discards the Category's working copy ({@code 03} section 1).
  */
 @Service
 public class ChangeCategoryStatusUseCase {
@@ -31,15 +34,17 @@ public class ChangeCategoryStatusUseCase {
     private final ProjectLanguageLookup languages;
     private final CategoryRules rules;
     private final CategoryRepository categories;
+    private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
 
     public ChangeCategoryStatusUseCase(ProjectAccessGateway accessGateway, ProjectLanguageLookup languages,
                                        CategoryRules rules, CategoryRepository categories,
-                                       TransactionTemplate transactionTemplate) {
+                                       WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate) {
         this.accessGateway = accessGateway;
         this.languages = languages;
         this.rules = rules;
         this.categories = categories;
+        this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -79,6 +84,9 @@ public class ChangeCategoryStatusUseCase {
                 if (!references.isEmpty()) {
                     throw new ResourceInUseException("The category is still used.", references);
                 }
+            }
+            if (target != ResourceStatus.ACTIVE) {
+                workingCopies.dropFor(projectId, WorkingCopyResourceType.CATEGORY, categoryId);
             }
             category.changeStatus(target, principal.subject(), Instant.now());
             return rules.view(categories.saveAndFlush(category));

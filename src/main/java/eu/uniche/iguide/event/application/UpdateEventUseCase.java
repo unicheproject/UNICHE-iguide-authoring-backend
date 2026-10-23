@@ -18,7 +18,10 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Saves a DRAFT Event's own fields and texts; ACTIVE Events wait for working copies (D-019). */
+/**
+ * Saves a DRAFT Event's own fields and texts. An ACTIVE Event is edited through its working copy, whose save and
+ * apply reuse {@link #write} (DECISIONS.md D-027).
+ */
 @Service
 public class UpdateEventUseCase {
 
@@ -43,30 +46,38 @@ public class UpdateEventUseCase {
             Event event = rules.requireEvent(projectId, eventId);
             ResourceRules.requireCurrentVersion(event.getVersion(), command.version(), "event");
             ResourceRules.requireDraft(event.getStatus(), "event");
-
-            List<ErrorItem> errors = new ArrayList<>();
-            Map<String, EventTranslationInput> requested =
-                    command.translations() == null ? Map.of() : command.translations();
-            rules.checkLanguages(projectId, requested.keySet(), errors);
-            rules.checkLinks(projectId, command.placeId(), command.poiId(), command.routeId(), errors);
-            String bookingUrl = EventRules.checkBookingUrl(command.bookingUrl(), errors);
-            rules.checkSlug(projectId, command.slug(), eventId, errors);
-            ResourceRules.throwIfAny(errors, "The event is invalid.");
-
-            event.edit(command.slug(), command.placeId(), command.poiId(), command.routeId(), bookingUrl,
-                    ResourceRules.trimToNull(command.internalName()), command.featured(), principal.subject(),
-                    Instant.now());
-            Map<String, EventTranslation> existing = translations.findByProjectIdAndEventId(projectId, eventId).stream()
-                    .collect(Collectors.toMap(EventTranslation::getLanguageCode, Function.identity()));
-            List<EventTranslation> toSave = new ArrayList<>();
-            requested.forEach((code, input) -> {
-                EventTranslation row = existing.getOrDefault(code, EventTranslation.of(projectId, eventId, code));
-                row.write(ResourceRules.trimToNull(input.title()), ResourceRules.trimToNull(input.summary()),
-                        ResourceRules.trimToNull(input.description()), ResourceRules.trimToNull(input.locationText()));
-                toSave.add(row);
-            });
-            translations.saveAll(toSave);
-            return rules.view(events.saveAndFlush(event));
+            return write(projectId, event, principal, command);
         });
+    }
+
+    /**
+     * Validates and writes the Event's own fields and texts, inside the caller's transaction, without a status or
+     * version check: the DRAFT save above and the working copy of an ACTIVE Event share it.
+     */
+    public EventView write(UUID projectId, Event event, UnichePrincipal principal, UpdateEventCommand command) {
+        UUID eventId = event.getId();
+        List<ErrorItem> errors = new ArrayList<>();
+        Map<String, EventTranslationInput> requested =
+                command.translations() == null ? Map.of() : command.translations();
+        rules.checkLanguages(projectId, requested.keySet(), errors);
+        rules.checkLinks(projectId, command.placeId(), command.poiId(), command.routeId(), errors);
+        String bookingUrl = EventRules.checkBookingUrl(command.bookingUrl(), errors);
+        rules.checkSlug(projectId, command.slug(), eventId, errors);
+        ResourceRules.throwIfAny(errors, "The event is invalid.");
+
+        event.edit(command.slug(), command.placeId(), command.poiId(), command.routeId(), bookingUrl,
+                ResourceRules.trimToNull(command.internalName()), command.featured(), principal.subject(),
+                Instant.now());
+        Map<String, EventTranslation> existing = translations.findByProjectIdAndEventId(projectId, eventId).stream()
+                .collect(Collectors.toMap(EventTranslation::getLanguageCode, Function.identity()));
+        List<EventTranslation> toSave = new ArrayList<>();
+        requested.forEach((code, input) -> {
+            EventTranslation row = existing.getOrDefault(code, EventTranslation.of(projectId, eventId, code));
+            row.write(ResourceRules.trimToNull(input.title()), ResourceRules.trimToNull(input.summary()),
+                    ResourceRules.trimToNull(input.description()), ResourceRules.trimToNull(input.locationText()));
+            toSave.add(row);
+        });
+        translations.saveAll(toSave);
+        return rules.view(events.saveAndFlush(event));
     }
 }

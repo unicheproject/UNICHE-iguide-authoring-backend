@@ -20,7 +20,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Saves a DRAFT Route's own fields and translations. Its stops are written through their child collection
- * ({@code 07} section 14). ACTIVE Routes wait for working copies (DECISIONS.md D-019).
+ * ({@code 07} section 14). An ACTIVE Route is edited through its working copy, whose save and apply reuse
+ * {@link #write} (DECISIONS.md D-027).
  */
 @Service
 public class UpdateRouteUseCase {
@@ -46,27 +47,35 @@ public class UpdateRouteUseCase {
             Route route = rules.requireRoute(projectId, routeId);
             ResourceRules.requireCurrentVersion(route.getVersion(), command.version(), "route");
             ResourceRules.requireDraft(route.getStatus(), "route");
-
-            List<ErrorItem> errors = new ArrayList<>();
-            if (command.type() == null) {
-                errors.add(new ErrorItem("type", "REQUIRED", "Choose INDOOR or OUTDOOR."));
-            }
-            RouteRules.checkRange(command.estimatedDurationMinutes(), RouteRules.MAX_DURATION_MINUTES,
-                    "estimatedDurationMinutes", errors);
-            RouteRules.checkRange(command.distanceMeters(), RouteRules.MAX_DISTANCE_METERS, "distanceMeters", errors);
-            Map<String, RouteTranslationInput> requested =
-                    command.translations() == null ? Map.of() : command.translations();
-            rules.checkLanguages(projectId, requested.keySet(), "", errors);
-            rules.checkSlug(projectId, command.slug(), routeId, errors);
-            ResourceRules.throwIfAny(errors, "The route is invalid.");
-
-            route.edit(command.slug(), command.type(), command.travelMode(), command.difficulty(),
-                    command.estimatedDurationMinutes(), command.distanceMeters(), command.loop(),
-                    ResourceRules.trimToNull(command.internalName()), command.featured(), principal.subject(),
-                    Instant.now());
-            saveTranslations(projectId, routeId, requested);
-            return rules.view(routes.saveAndFlush(route));
+            return write(projectId, route, principal, command);
         });
+    }
+
+    /**
+     * Validates and writes the Route's own fields and translations, inside the caller's transaction, without a
+     * status or version check: the DRAFT save above and the working copy of an ACTIVE Route share it.
+     */
+    public RouteView write(UUID projectId, Route route, UnichePrincipal principal, UpdateRouteCommand command) {
+        UUID routeId = route.getId();
+        List<ErrorItem> errors = new ArrayList<>();
+        if (command.type() == null) {
+            errors.add(new ErrorItem("type", "REQUIRED", "Choose INDOOR or OUTDOOR."));
+        }
+        RouteRules.checkRange(command.estimatedDurationMinutes(), RouteRules.MAX_DURATION_MINUTES,
+                "estimatedDurationMinutes", errors);
+        RouteRules.checkRange(command.distanceMeters(), RouteRules.MAX_DISTANCE_METERS, "distanceMeters", errors);
+        Map<String, RouteTranslationInput> requested =
+                command.translations() == null ? Map.of() : command.translations();
+        rules.checkLanguages(projectId, requested.keySet(), "", errors);
+        rules.checkSlug(projectId, command.slug(), routeId, errors);
+        ResourceRules.throwIfAny(errors, "The route is invalid.");
+
+        route.edit(command.slug(), command.type(), command.travelMode(), command.difficulty(),
+                command.estimatedDurationMinutes(), command.distanceMeters(), command.loop(),
+                ResourceRules.trimToNull(command.internalName()), command.featured(), principal.subject(),
+                Instant.now());
+        saveTranslations(projectId, routeId, requested);
+        return rules.view(routes.saveAndFlush(route));
     }
 
     private void saveTranslations(UUID projectId, UUID routeId, Map<String, RouteTranslationInput> requested) {

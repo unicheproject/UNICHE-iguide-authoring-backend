@@ -17,8 +17,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * A Guide with its translations and its blocks in order. {@code hasWorkingCopy} is always false until
- * working copies exist (GAPS.md G-027).
+ * A Guide with its translations and its blocks in order. {@code hasWorkingCopy} and {@code workingCopyUpdatedAt}
+ * tell whether the Guide has pending changes ({@code 07} section 14).
  */
 public record GuideResponse(UUID id, UUID projectId, String slug, ResourceStatus status, String internalName,
                             Integer estimatedReadingMinutes, boolean featured, int sortOrder, Instant archivedAt,
@@ -41,6 +41,10 @@ public record GuideResponse(UUID id, UUID projectId, String slug, ResourceStatus
     }
 
     public static GuideResponse from(GuideView view) {
+        return from(view, null);
+    }
+
+    public static GuideResponse from(GuideView view, Instant workingCopyUpdatedAt) {
         Guide g = view.guide();
         Map<String, GuideRequests.GuideTranslationBody> texts = view.translations().stream()
                 .collect(Collectors.toMap(GuideTranslation::getLanguageCode,
@@ -48,7 +52,7 @@ public record GuideResponse(UUID id, UUID projectId, String slug, ResourceStatus
                         (a, b) -> a, TreeMap::new));
         return new GuideResponse(g.getId(), g.getProjectId(), g.getSlug(), g.getStatus(), g.getInternalName(),
                 g.getEstimatedReadingMinutes(), g.isFeatured(), g.getSortOrder(), g.getArchivedAt(), g.getCreatedAt(),
-                g.getUpdatedAt(), g.getVersion(), false, null, texts,
+                g.getUpdatedAt(), g.getVersion(), workingCopyUpdatedAt != null, workingCopyUpdatedAt, texts,
                 view.blocks().stream().map(Block::from).toList(),
                 view.media().stream().map(AssetResponse.Binding::from).toList());
     }

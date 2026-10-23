@@ -21,8 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Saves a DRAFT Point of Interest in place. ACTIVE ones are edited through a working copy, which does not
- * exist yet, so only DRAFT ones are accepted here (DECISIONS.md D-019).
+ * Saves a DRAFT Point of Interest in place. An ACTIVE one is edited through its working copy ({@code 03}
+ * section 1), whose save and apply reuse {@link #write} (DECISIONS.md D-027).
  */
 @Service
 public class UpdatePoiUseCase {
@@ -51,29 +51,37 @@ public class UpdatePoiUseCase {
             PointOfInterest poi = rules.requirePoi(projectId, poiId);
             ResourceRules.requireCurrentVersion(poi.getVersion(), command.version(), "point of interest");
             ResourceRules.requireDraft(poi.getStatus(), "point of interest");
-
-            List<ErrorItem> errors = new ArrayList<>();
-            ResourceRules.checkOptionalCoordinates(command.latitude(), command.longitude(), "", errors);
-            PoiRules.checkVisitMinutes(command.estimatedVisitMinutes(), errors);
-            Map<String, PoiTranslationInput> requested =
-                    command.translations() == null ? Map.of() : command.translations();
-            Set<String> enabled = languages.enabledCodes(projectId);
-            requested.keySet().stream()
-                    .filter(code -> !enabled.contains(code))
-                    .forEach(code -> errors.add(new ErrorItem("translations." + code, "UNKNOWN_LANGUAGE",
-                            "Is not a language of this project.")));
-            rules.checkPlace(projectId, command.placeId(), errors);
-            String code = ResourceRules.trimToNull(command.code());
-            rules.checkCode(projectId, code, poiId, errors);
-            rules.checkSlug(projectId, command.slug(), poiId, errors);
-            ResourceRules.throwIfAny(errors, "The point of interest is invalid.");
-
-            poi.edit(command.placeId(), command.slug(), code, ResourceRules.trimToNull(command.internalName()),
-                    command.latitude(), command.longitude(), command.estimatedVisitMinutes(), command.featured(),
-                    principal.subject(), Instant.now());
-            saveTranslations(projectId, poiId, requested);
-            return rules.view(pois.saveAndFlush(poi));
+            return write(projectId, poi, principal, command);
         });
+    }
+
+    /**
+     * Validates and writes the editable state onto the Point of Interest, inside the caller's transaction,
+     * without a status or version check: the DRAFT save above and the working copy of an ACTIVE one share it.
+     */
+    public PoiView write(UUID projectId, PointOfInterest poi, UnichePrincipal principal, UpdatePoiCommand command) {
+        UUID poiId = poi.getId();
+        List<ErrorItem> errors = new ArrayList<>();
+        ResourceRules.checkOptionalCoordinates(command.latitude(), command.longitude(), "", errors);
+        PoiRules.checkVisitMinutes(command.estimatedVisitMinutes(), errors);
+        Map<String, PoiTranslationInput> requested =
+                command.translations() == null ? Map.of() : command.translations();
+        Set<String> enabled = languages.enabledCodes(projectId);
+        requested.keySet().stream()
+                .filter(code -> !enabled.contains(code))
+                .forEach(code -> errors.add(new ErrorItem("translations." + code, "UNKNOWN_LANGUAGE",
+                        "Is not a language of this project.")));
+        rules.checkPlace(projectId, command.placeId(), errors);
+        String code = ResourceRules.trimToNull(command.code());
+        rules.checkCode(projectId, code, poiId, errors);
+        rules.checkSlug(projectId, command.slug(), poiId, errors);
+        ResourceRules.throwIfAny(errors, "The point of interest is invalid.");
+
+        poi.edit(command.placeId(), command.slug(), code, ResourceRules.trimToNull(command.internalName()),
+                command.latitude(), command.longitude(), command.estimatedVisitMinutes(), command.featured(),
+                principal.subject(), Instant.now());
+        saveTranslations(projectId, poiId, requested);
+        return rules.view(pois.saveAndFlush(poi));
     }
 
     private void saveTranslations(UUID projectId, UUID poiId, Map<String, PoiTranslationInput> requested) {

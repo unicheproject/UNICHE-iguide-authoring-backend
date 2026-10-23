@@ -11,6 +11,8 @@ import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -21,7 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Applies one lifecycle transition ({@code 03} section 1). Activation needs a title in the default
  * language. Deactivation and archival are refused with {@code RESOURCE_IN_USE} while a map or floor plan
  * links or places the Place. Sub-Places and, later, Points of Interest inside it do not block
- * (DECISIONS.md D-019).
+ * (DECISIONS.md D-019). Leaving ACTIVE discards the Place's working copy ({@code 03} section 1).
  */
 @Service
 public class ChangePlaceStatusUseCase {
@@ -30,14 +32,17 @@ public class ChangePlaceStatusUseCase {
     private final ProjectLanguageLookup languages;
     private final PlaceRules rules;
     private final PlaceRepository places;
+    private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
 
     public ChangePlaceStatusUseCase(ProjectAccessGateway accessGateway, ProjectLanguageLookup languages,
-                                    PlaceRules rules, PlaceRepository places, TransactionTemplate transactionTemplate) {
+                                    PlaceRules rules, PlaceRepository places, WorkingCopyStore workingCopies,
+                                    TransactionTemplate transactionTemplate) {
         this.accessGateway = accessGateway;
         this.languages = languages;
         this.rules = rules;
         this.places = places;
+        this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -63,6 +68,9 @@ public class ChangePlaceStatusUseCase {
                 if (!references.isEmpty()) {
                     throw new ResourceInUseException("The place is still used by other resources.", references);
                 }
+            }
+            if (target != ResourceStatus.ACTIVE) {
+                workingCopies.dropFor(projectId, WorkingCopyResourceType.PLACE, placeId);
             }
             place.changeStatus(target, principal.subject(), Instant.now());
             return rules.view(places.saveAndFlush(place));

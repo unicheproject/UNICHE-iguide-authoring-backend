@@ -21,7 +21,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Saves a DRAFT Category. A Category in use keeps its scope ({@code 03} section 10); when the scope
- * changes, its subcategories move along so they keep sharing it.
+ * changes, its subcategories move along so they keep sharing it. An ACTIVE Category is edited through its
+ * working copy, whose save and apply reuse {@link #write} (DECISIONS.md D-027).
  */
 @Service
 public class UpdateCategoryUseCase {
@@ -51,43 +52,52 @@ public class UpdateCategoryUseCase {
             Category category = rules.requireCategory(projectId, categoryId);
             ResourceRules.requireCurrentVersion(category.getVersion(), command.version(), "category");
             ResourceRules.requireDraft(category.getStatus(), "category");
-
-            List<ErrorItem> errors = new ArrayList<>();
-            if (command.scope() == null) {
-                errors.add(new ErrorItem("scope", "REQUIRED", "Choose POI or ROUTE."));
-            } else if (command.scope() != category.getScope()
-                    && bindings.existsByProjectIdAndCategoryId(projectId, categoryId)) {
-                errors.add(new ErrorItem("scope", "IN_USE",
-                        "Resources are in this category; remove them before changing what it applies to."));
-            }
-            rules.checkParent(projectId, command.parentCategoryId(), categoryId, command.scope(), errors);
-            String icon = CategoryRules.checkIcon(command.icon(), errors);
-            Map<String, CategoryTranslationInput> requested =
-                    command.translations() == null ? Map.of() : command.translations();
-            rules.checkLanguages(projectId, requested.keySet(), errors);
-            requested.forEach((code, input) ->
-                    CategoryRules.checkName(input.name(), "translations." + code + ".name", false, errors));
-            rules.checkCode(projectId, command.code(), categoryId, errors);
-            ResourceRules.throwIfAny(errors, "The category is invalid.");
-
-            Instant now = Instant.now();
-            boolean scopeChanged = command.scope() != category.getScope();
-            category.edit(command.code(), command.scope(), command.parentCategoryId(), icon, principal.subject(), now);
-            if (scopeChanged) {
-                List<Category> children = categories.findByProjectIdAndParentCategoryId(projectId, categoryId);
-                children.forEach(child -> child.moveToScope(command.scope(), principal.subject(), now));
-                categories.saveAll(children);
-            }
-            Map<String, CategoryTranslation> existing = translations.findByProjectIdAndCategoryId(projectId, categoryId)
-                    .stream().collect(Collectors.toMap(CategoryTranslation::getLanguageCode, Function.identity()));
-            List<CategoryTranslation> toSave = new ArrayList<>();
-            requested.forEach((code, input) -> {
-                CategoryTranslation row = existing.getOrDefault(code, CategoryTranslation.of(projectId, categoryId, code));
-                row.write(ResourceRules.trimToNull(input.name()), ResourceRules.trimToNull(input.description()));
-                toSave.add(row);
-            });
-            translations.saveAll(toSave);
-            return rules.view(categories.saveAndFlush(category));
+            return write(projectId, category, principal, command);
         });
+    }
+
+    /**
+     * Validates and writes the editable state onto the Category, inside the caller's transaction, without a
+     * status or version check: the DRAFT save above and the working copy of an ACTIVE Category share it.
+     */
+    public CategoryView write(UUID projectId, Category category, UnichePrincipal principal,
+                              UpdateCategoryCommand command) {
+        UUID categoryId = category.getId();
+        List<ErrorItem> errors = new ArrayList<>();
+        if (command.scope() == null) {
+            errors.add(new ErrorItem("scope", "REQUIRED", "Choose POI or ROUTE."));
+        } else if (command.scope() != category.getScope()
+                && bindings.existsByProjectIdAndCategoryId(projectId, categoryId)) {
+            errors.add(new ErrorItem("scope", "IN_USE",
+                    "Resources are in this category; remove them before changing what it applies to."));
+        }
+        rules.checkParent(projectId, command.parentCategoryId(), categoryId, command.scope(), errors);
+        String icon = CategoryRules.checkIcon(command.icon(), errors);
+        Map<String, CategoryTranslationInput> requested =
+                command.translations() == null ? Map.of() : command.translations();
+        rules.checkLanguages(projectId, requested.keySet(), errors);
+        requested.forEach((code, input) ->
+                CategoryRules.checkName(input.name(), "translations." + code + ".name", false, errors));
+        rules.checkCode(projectId, command.code(), categoryId, errors);
+        ResourceRules.throwIfAny(errors, "The category is invalid.");
+
+        Instant now = Instant.now();
+        boolean scopeChanged = command.scope() != category.getScope();
+        category.edit(command.code(), command.scope(), command.parentCategoryId(), icon, principal.subject(), now);
+        if (scopeChanged) {
+            List<Category> children = categories.findByProjectIdAndParentCategoryId(projectId, categoryId);
+            children.forEach(child -> child.moveToScope(command.scope(), principal.subject(), now));
+            categories.saveAll(children);
+        }
+        Map<String, CategoryTranslation> existing = translations.findByProjectIdAndCategoryId(projectId, categoryId)
+                .stream().collect(Collectors.toMap(CategoryTranslation::getLanguageCode, Function.identity()));
+        List<CategoryTranslation> toSave = new ArrayList<>();
+        requested.forEach((code, input) -> {
+            CategoryTranslation row = existing.getOrDefault(code, CategoryTranslation.of(projectId, categoryId, code));
+            row.write(ResourceRules.trimToNull(input.name()), ResourceRules.trimToNull(input.description()));
+            toSave.add(row);
+        });
+        translations.saveAll(toSave);
+        return rules.view(categories.saveAndFlush(category));
     }
 }

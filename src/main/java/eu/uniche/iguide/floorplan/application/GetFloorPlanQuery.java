@@ -9,6 +9,8 @@ import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.resource.application.PageRequests;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -33,9 +35,12 @@ public class GetFloorPlanQuery {
         this.positions = positions;
     }
 
-    /** In {@code sortOrder}, optionally only one Place's plans, which is its floor switcher order. */
+    /**
+     * In {@code sortOrder}, optionally only one Place's plans, which is its floor switcher order, and only the
+     * plans with a working copy ({@code pending}, {@code 07} section 14).
+     */
     public Page<FloorPlan> list(UUID projectId, UnichePrincipal principal, ResourceStatus status, UUID placeId,
-                                Integer page, Integer size) {
+                                boolean pending, Integer page, Integer size) {
         accessGateway.requireAccess(projectId, principal);
         Specification<FloorPlan> spec = (root, query, cb) -> cb.equal(root.get("projectId"), projectId);
         if (status != null) {
@@ -43,6 +48,9 @@ public class GetFloorPlanQuery {
         }
         if (placeId != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("placeId"), placeId));
+        }
+        if (pending) {
+            spec = spec.and(WorkingCopyStore.pending(projectId, WorkingCopyResourceType.FLOOR_PLAN));
         }
         return plans.findAll(spec, PageRequests.of(page, size, Sort.by("sortOrder", "createdAt")));
     }

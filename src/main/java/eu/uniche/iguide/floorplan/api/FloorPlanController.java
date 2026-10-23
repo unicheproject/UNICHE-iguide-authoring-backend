@@ -13,10 +13,15 @@ import eu.uniche.iguide.resource.api.ChangeStatusRequest;
 import eu.uniche.iguide.resource.api.OrderRequest;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,26 +47,33 @@ public class FloorPlanController {
     private final ChangeFloorPlanStatusUseCase changeStatus;
     private final ReorderFloorPlansUseCase reorderPlans;
     private final FloorPlanPositionUseCase positions;
+    private final WorkingCopyStore workingCopies;
 
     public FloorPlanController(GetFloorPlanQuery getPlans, CreateFloorPlanUseCase createPlan,
                                UpdateFloorPlanUseCase updatePlan, ChangeFloorPlanStatusUseCase changeStatus,
-                               ReorderFloorPlansUseCase reorderPlans, FloorPlanPositionUseCase positions) {
+                               ReorderFloorPlansUseCase reorderPlans, FloorPlanPositionUseCase positions,
+                               WorkingCopyStore workingCopies) {
         this.getPlans = getPlans;
         this.createPlan = createPlan;
         this.updatePlan = updatePlan;
         this.changeStatus = changeStatus;
         this.reorderPlans = reorderPlans;
         this.positions = positions;
+        this.workingCopies = workingCopies;
     }
 
     @GetMapping("/floor-plans")
     public PageResponse<FloorPlanResponse> list(@PathVariable UUID projectId,
                                                 @RequestParam(required = false) ResourceStatus status,
                                                 @RequestParam(required = false) UUID placeId,
+                                                @RequestParam(required = false) Boolean pending,
                                                 @RequestParam(required = false) Integer page,
                                                 @RequestParam(required = false) Integer size) {
-        return PageResponse.of(getPlans.list(projectId, CurrentPrincipal.require(), status, placeId, page, size),
-                FloorPlanResponse::from);
+        Page<FloorPlan> result = getPlans.list(projectId, CurrentPrincipal.require(), status, placeId,
+                Boolean.TRUE.equals(pending), page, size);
+        Map<UUID, Instant> copies = workingCopies.updatedAt(projectId, WorkingCopyResourceType.FLOOR_PLAN,
+                result.map(FloorPlan::getId).getContent());
+        return PageResponse.of(result, plan -> FloorPlanResponse.from(plan, copies.get(plan.getId())));
     }
 
     @PostMapping("/floor-plans")
@@ -74,7 +86,8 @@ public class FloorPlanController {
 
     @GetMapping("/floor-plans/{planId}")
     public FloorPlanResponse get(@PathVariable UUID projectId, @PathVariable UUID planId) {
-        return FloorPlanResponse.from(getPlans.get(projectId, planId, CurrentPrincipal.require()));
+        return FloorPlanResponse.from(getPlans.get(projectId, planId, CurrentPrincipal.require()),
+                workingCopies.updatedAt(projectId, WorkingCopyResourceType.FLOOR_PLAN, planId));
     }
 
     @PutMapping("/floor-plans/{planId}")

@@ -21,9 +21,13 @@ public final class CategoryRequests {
                          Map<String, CategoryTranslationBody> translations) {
 
         Map<String, CategoryTranslationInput> translationInputs() {
-            return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
-                    Map.Entry::getKey, e -> new CategoryTranslationInput(e.getValue().name(), e.getValue().description())));
+            return inputs(translations);
         }
+    }
+
+    static Map<String, CategoryTranslationInput> inputs(Map<String, CategoryTranslationBody> translations) {
+        return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey, e -> new CategoryTranslationInput(e.getValue().name(), e.getValue().description())));
     }
 
     public record CategoryTranslationBody(String name, String description) {

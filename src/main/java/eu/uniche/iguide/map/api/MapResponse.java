@@ -8,7 +8,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-/** A Geographic Map. Its placements are a child collection, {@code .../maps/{id}/resources}. */
+/**
+ * A Geographic Map. Its placements are a child collection, {@code .../maps/{id}/resources}. {@code hasWorkingCopy}
+ * and {@code workingCopyUpdatedAt} tell whether the map has pending changes ({@code 07} section 14).
+ */
 public record MapResponse(UUID id, UUID projectId, UUID placeId, ResourceStatus status, String internalName,
                           BigDecimal initialLatitude, BigDecimal initialLongitude, BigDecimal initialZoom,
                           BigDecimal minLatitude, BigDecimal minLongitude, BigDecimal maxLatitude,
@@ -17,12 +20,16 @@ public record MapResponse(UUID id, UUID projectId, UUID placeId, ResourceStatus 
                           long version, boolean hasWorkingCopy, Instant workingCopyUpdatedAt) {
 
     public static MapResponse from(GeographicMap m) {
+        return from(m, null);
+    }
+
+    public static MapResponse from(GeographicMap m, Instant workingCopyUpdatedAt) {
         return new MapResponse(m.getId(), m.getProjectId(), m.getPlaceId(), m.getStatus(), m.getInternalName(),
                 m.getInitialLatitude(), m.getInitialLongitude(), m.getInitialZoom(), m.getMinLatitude(),
                 m.getMinLongitude(), m.getMaxLatitude(), m.getMaxLongitude(), m.getVisibility(),
                 m.isVisitorFilterEnabled(), (String) m.getConfiguration().get("area"),
                 (String) m.getConfiguration().get("osmId"), m.getArchivedAt(), m.getCreatedAt(), m.getUpdatedAt(),
-                m.getVersion(), false, null);
+                m.getVersion(), workingCopyUpdatedAt != null, workingCopyUpdatedAt);
     }
 
     public record Placement(UUID id, String resourceType, UUID resourceId, BigDecimal latitude, BigDecimal longitude) {

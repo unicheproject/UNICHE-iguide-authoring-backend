@@ -22,8 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Saves a DRAFT Place in place. An ACTIVE Place is edited through a working copy ({@code 03} section 1),
- * which does not exist yet, so only DRAFT Places are accepted here (DECISIONS.md D-019).
+ * Saves a DRAFT Place in place. An ACTIVE Place is edited through its working copy ({@code 03} section 1), whose
+ * save and apply reuse {@link #write} (DECISIONS.md D-027).
  */
 @Service
 public class UpdatePlaceUseCase {
@@ -52,34 +52,42 @@ public class UpdatePlaceUseCase {
             Place place = rules.requirePlace(projectId, placeId);
             ResourceRules.requireCurrentVersion(place.getVersion(), command.version(), "place");
             ResourceRules.requireDraft(place.getStatus(), "place");
-
-            List<ErrorItem> errors = new ArrayList<>();
-            if (command.type() == null) {
-                errors.add(new ErrorItem("type", "REQUIRED", "Is required."));
-            }
-            PlaceEnvironment environment = command.environment() != null ? command.environment() : place.getEnvironment();
-            if (environment != place.getEnvironment() && rules.isLinked(projectId, placeId)) {
-                errors.add(new ErrorItem("environment", "LINKED",
-                        "Unlink the place's map or floor plans before changing its environment."));
-            }
-            ResourceRules.checkOptionalCoordinates(command.latitude(), command.longitude(), "", errors);
-            Map<String, PlaceTranslationInput> requested =
-                    command.translations() == null ? Map.of() : command.translations();
-            Set<String> enabled = languages.enabledCodes(projectId);
-            requested.keySet().stream()
-                    .filter(code -> !enabled.contains(code))
-                    .forEach(code -> errors.add(new ErrorItem("translations." + code, "UNKNOWN_LANGUAGE",
-                            "Is not a language of this project.")));
-            rules.checkParent(projectId, command.parentPlaceId(), placeId, errors);
-            rules.checkSlug(projectId, command.slug(), placeId, errors);
-            ResourceRules.throwIfAny(errors, "The place is invalid.");
-
-            place.edit(command.parentPlaceId(), command.slug(), command.type(), environment,
-                    ResourceRules.trimToNull(command.internalName()), command.latitude(), command.longitude(),
-                    command.featured(), principal.subject(), Instant.now());
-            saveTranslations(projectId, placeId, requested);
-            return rules.view(places.saveAndFlush(place));
+            return write(projectId, place, principal, command);
         });
+    }
+
+    /**
+     * Validates and writes the editable state onto the Place, inside the caller's transaction, without a status
+     * or version check: the DRAFT save above and the working copy of an ACTIVE Place share it.
+     */
+    public PlaceView write(UUID projectId, Place place, UnichePrincipal principal, UpdatePlaceCommand command) {
+        UUID placeId = place.getId();
+        List<ErrorItem> errors = new ArrayList<>();
+        if (command.type() == null) {
+            errors.add(new ErrorItem("type", "REQUIRED", "Is required."));
+        }
+        PlaceEnvironment environment = command.environment() != null ? command.environment() : place.getEnvironment();
+        if (environment != place.getEnvironment() && rules.isLinked(projectId, placeId)) {
+            errors.add(new ErrorItem("environment", "LINKED",
+                    "Unlink the place's map or floor plans before changing its environment."));
+        }
+        ResourceRules.checkOptionalCoordinates(command.latitude(), command.longitude(), "", errors);
+        Map<String, PlaceTranslationInput> requested =
+                command.translations() == null ? Map.of() : command.translations();
+        Set<String> enabled = languages.enabledCodes(projectId);
+        requested.keySet().stream()
+                .filter(code -> !enabled.contains(code))
+                .forEach(code -> errors.add(new ErrorItem("translations." + code, "UNKNOWN_LANGUAGE",
+                        "Is not a language of this project.")));
+        rules.checkParent(projectId, command.parentPlaceId(), placeId, errors);
+        rules.checkSlug(projectId, command.slug(), placeId, errors);
+        ResourceRules.throwIfAny(errors, "The place is invalid.");
+
+        place.edit(command.parentPlaceId(), command.slug(), command.type(), environment,
+                ResourceRules.trimToNull(command.internalName()), command.latitude(), command.longitude(),
+                command.featured(), principal.subject(), Instant.now());
+        saveTranslations(projectId, placeId, requested);
+        return rules.view(places.saveAndFlush(place));
     }
 
     private void saveTranslations(UUID projectId, UUID placeId, Map<String, PlaceTranslationInput> requested) {

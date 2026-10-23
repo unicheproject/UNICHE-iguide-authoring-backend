@@ -15,8 +15,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * An Event with its translations and its occurrences in start order. {@code hasWorkingCopy} is always
- * false until working copies exist (GAPS.md G-027).
+ * An Event with its translations and its occurrences in start order. {@code hasWorkingCopy} and
+ * {@code workingCopyUpdatedAt} tell whether the Event has pending changes ({@code 07} section 14).
  */
 public record EventResponse(UUID id, UUID projectId, String slug, ResourceStatus status, UUID placeId, UUID poiId,
                             UUID routeId, String bookingUrl, String internalName, boolean featured, int sortOrder,
@@ -33,13 +33,18 @@ public record EventResponse(UUID id, UUID projectId, String slug, ResourceStatus
     }
 
     public static EventResponse from(EventView view) {
+        return from(view, null);
+    }
+
+    public static EventResponse from(EventView view, Instant workingCopyUpdatedAt) {
         Event e = view.event();
         Map<String, EventTranslationBody> texts = view.translations().stream()
                 .collect(Collectors.toMap(EventTranslation::getLanguageCode, EventTranslationBody::from,
                         (a, b) -> a, TreeMap::new));
         return new EventResponse(e.getId(), e.getProjectId(), e.getSlug(), e.getStatus(), e.getPlaceId(), e.getPoiId(),
                 e.getRouteId(), e.getBookingUrl(), e.getInternalName(), e.isFeatured(), e.getSortOrder(),
-                e.getArchivedAt(), e.getCreatedAt(), e.getUpdatedAt(), e.getVersion(), false, null, texts,
+                e.getArchivedAt(), e.getCreatedAt(), e.getUpdatedAt(), e.getVersion(), workingCopyUpdatedAt != null,
+                workingCopyUpdatedAt, texts,
                 view.occurrences().stream().map(Occurrence::from).toList(),
                 view.media().stream().map(AssetResponse.Binding::from).toList());
     }

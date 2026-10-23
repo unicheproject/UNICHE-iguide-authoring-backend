@@ -18,7 +18,10 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Saves a DRAFT Guide's own fields and title/summary; ACTIVE Guides wait for working copies (D-019). */
+/**
+ * Saves a DRAFT Guide's own fields and title/summary. An ACTIVE Guide is edited through its working copy, whose
+ * save and apply reuse {@link #write} (DECISIONS.md D-027).
+ */
 @Service
 public class UpdateGuideUseCase {
 
@@ -43,31 +46,39 @@ public class UpdateGuideUseCase {
             Guide guide = rules.requireGuide(projectId, guideId);
             ResourceRules.requireCurrentVersion(guide.getVersion(), command.version(), "guide");
             ResourceRules.requireDraft(guide.getStatus(), "guide");
-
-            List<ErrorItem> errors = new ArrayList<>();
-            Integer minutes = command.estimatedReadingMinutes();
-            if (minutes != null && (minutes < 1 || minutes > GuideRules.MAX_READING_MINUTES)) {
-                errors.add(new ErrorItem("estimatedReadingMinutes", "OUT_OF_RANGE",
-                        "Must be between 1 and " + GuideRules.MAX_READING_MINUTES + "."));
-            }
-            Map<String, GuideTranslationInput> requested =
-                    command.translations() == null ? Map.of() : command.translations();
-            rules.checkLanguages(projectId, requested.keySet(), errors);
-            rules.checkSlug(projectId, command.slug(), guideId, errors);
-            ResourceRules.throwIfAny(errors, "The guide is invalid.");
-
-            guide.edit(command.slug(), ResourceRules.trimToNull(command.internalName()), minutes, command.featured(),
-                    principal.subject(), Instant.now());
-            Map<String, GuideTranslation> existing = translations.findByProjectIdAndGuideId(projectId, guideId).stream()
-                    .collect(Collectors.toMap(GuideTranslation::getLanguageCode, Function.identity()));
-            List<GuideTranslation> toSave = new ArrayList<>();
-            requested.forEach((code, input) -> {
-                GuideTranslation row = existing.getOrDefault(code, GuideTranslation.of(projectId, guideId, code));
-                row.write(ResourceRules.trimToNull(input.title()), ResourceRules.trimToNull(input.summary()));
-                toSave.add(row);
-            });
-            translations.saveAll(toSave);
-            return rules.view(guides.saveAndFlush(guide));
+            return write(projectId, guide, principal, command);
         });
+    }
+
+    /**
+     * Validates and writes the Guide's own fields and translations, inside the caller's transaction, without a
+     * status or version check: the DRAFT save above and the working copy of an ACTIVE Guide share it.
+     */
+    public GuideView write(UUID projectId, Guide guide, UnichePrincipal principal, UpdateGuideCommand command) {
+        UUID guideId = guide.getId();
+        List<ErrorItem> errors = new ArrayList<>();
+        Integer minutes = command.estimatedReadingMinutes();
+        if (minutes != null && (minutes < 1 || minutes > GuideRules.MAX_READING_MINUTES)) {
+            errors.add(new ErrorItem("estimatedReadingMinutes", "OUT_OF_RANGE",
+                    "Must be between 1 and " + GuideRules.MAX_READING_MINUTES + "."));
+        }
+        Map<String, GuideTranslationInput> requested =
+                command.translations() == null ? Map.of() : command.translations();
+        rules.checkLanguages(projectId, requested.keySet(), errors);
+        rules.checkSlug(projectId, command.slug(), guideId, errors);
+        ResourceRules.throwIfAny(errors, "The guide is invalid.");
+
+        guide.edit(command.slug(), ResourceRules.trimToNull(command.internalName()), minutes, command.featured(),
+                principal.subject(), Instant.now());
+        Map<String, GuideTranslation> existing = translations.findByProjectIdAndGuideId(projectId, guideId).stream()
+                .collect(Collectors.toMap(GuideTranslation::getLanguageCode, Function.identity()));
+        List<GuideTranslation> toSave = new ArrayList<>();
+        requested.forEach((code, input) -> {
+            GuideTranslation row = existing.getOrDefault(code, GuideTranslation.of(projectId, guideId, code));
+            row.write(ResourceRules.trimToNull(input.title()), ResourceRules.trimToNull(input.summary()));
+            toSave.add(row);
+        });
+        translations.saveAll(toSave);
+        return rules.view(guides.saveAndFlush(guide));
     }
 }

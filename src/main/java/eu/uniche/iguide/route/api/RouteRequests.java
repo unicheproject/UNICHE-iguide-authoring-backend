@@ -27,8 +27,7 @@ public final class RouteRequests {
                          Map<String, RouteTranslationBody> translations) {
 
         Map<String, RouteTranslationInput> translationInputs() {
-            return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
-                    Map.Entry::getKey, e -> e.getValue().toInput()));
+            return routeInputs(translations);
         }
     }
 
@@ -36,8 +35,17 @@ public final class RouteRequests {
     public record Stop(UUID poiId, Map<String, StopTranslationBody> translations) {
 
         Map<String, StopTranslationInput> translationInputs() {
-            return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
-                    Map.Entry::getKey, e -> e.getValue().toInput()));
+            return stopInputs(translations);
         }
+    }
+
+    static Map<String, StopTranslationInput> stopInputs(Map<String, StopTranslationBody> translations) {
+        return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey, e -> e.getValue().toInput()));
+    }
+
+    static Map<String, RouteTranslationInput> routeInputs(Map<String, RouteTranslationBody> translations) {
+        return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey, e -> e.getValue().toInput()));
     }
 }

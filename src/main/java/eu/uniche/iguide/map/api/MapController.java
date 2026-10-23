@@ -11,10 +11,15 @@ import eu.uniche.iguide.platform.web.PageResponse;
 import eu.uniche.iguide.resource.api.ChangeStatusRequest;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,23 +41,30 @@ public class MapController {
     private final UpdateMapUseCase updateMap;
     private final ChangeMapStatusUseCase changeStatus;
     private final MapPlacementUseCase placements;
+    private final WorkingCopyStore workingCopies;
 
     public MapController(GetMapQuery getMaps, CreateMapUseCase createMap, UpdateMapUseCase updateMap,
-                         ChangeMapStatusUseCase changeStatus, MapPlacementUseCase placements) {
+                         ChangeMapStatusUseCase changeStatus, MapPlacementUseCase placements,
+                         WorkingCopyStore workingCopies) {
         this.getMaps = getMaps;
         this.createMap = createMap;
         this.updateMap = updateMap;
         this.changeStatus = changeStatus;
         this.placements = placements;
+        this.workingCopies = workingCopies;
     }
 
     @GetMapping
     public PageResponse<MapResponse> list(@PathVariable UUID projectId,
                                           @RequestParam(required = false) ResourceStatus status,
+                                          @RequestParam(required = false) Boolean pending,
                                           @RequestParam(required = false) Integer page,
                                           @RequestParam(required = false) Integer size) {
-        return PageResponse.of(getMaps.list(projectId, CurrentPrincipal.require(), status, page, size),
-                MapResponse::from);
+        Page<GeographicMap> result = getMaps.list(projectId, CurrentPrincipal.require(), status,
+                Boolean.TRUE.equals(pending), page, size);
+        Map<UUID, Instant> copies = workingCopies.updatedAt(projectId, WorkingCopyResourceType.GEOGRAPHIC_MAP,
+                result.map(GeographicMap::getId).getContent());
+        return PageResponse.of(result, map -> MapResponse.from(map, copies.get(map.getId())));
     }
 
     @PostMapping
@@ -65,7 +77,8 @@ public class MapController {
 
     @GetMapping("/{mapId}")
     public MapResponse get(@PathVariable UUID projectId, @PathVariable UUID mapId) {
-        return MapResponse.from(getMaps.get(projectId, mapId, CurrentPrincipal.require()));
+        return MapResponse.from(getMaps.get(projectId, mapId, CurrentPrincipal.require()),
+                workingCopies.updatedAt(projectId, WorkingCopyResourceType.GEOGRAPHIC_MAP, mapId));
     }
 
     @PutMapping("/{mapId}")

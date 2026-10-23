@@ -6,6 +6,8 @@ import eu.uniche.iguide.platform.projectaccess.ProjectAccessGateway;
 import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Applies one lifecycle transition. A map has no required fields ({@code 03} section 1) and nothing
  * refers to it yet, so only the transition table applies. Archival frees the linked Place.
+ * Leaving ACTIVE discards the working copy ({@code 03} section 1).
  */
 @Service
 public class ChangeMapStatusUseCase {
@@ -21,13 +24,15 @@ public class ChangeMapStatusUseCase {
     private final ProjectAccessGateway accessGateway;
     private final MapRules rules;
     private final GeographicMapRepository maps;
+    private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
 
     public ChangeMapStatusUseCase(ProjectAccessGateway accessGateway, MapRules rules, GeographicMapRepository maps,
-                                  TransactionTemplate transactionTemplate) {
+                                  WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate) {
         this.accessGateway = accessGateway;
         this.rules = rules;
         this.maps = maps;
+        this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -38,6 +43,9 @@ public class ChangeMapStatusUseCase {
             GeographicMap map = rules.requireMap(projectId, mapId);
             ResourceRules.requireCurrentVersion(map.getVersion(), version, "map");
             ResourceRules.requireTransition(map.getStatus(), target, "map");
+            if (target != ResourceStatus.ACTIVE) {
+                workingCopies.dropFor(projectId, WorkingCopyResourceType.GEOGRAPHIC_MAP, mapId);
+            }
             map.changeStatus(target, principal.subject(), Instant.now());
             return maps.saveAndFlush(map);
         });

@@ -10,6 +10,8 @@ import eu.uniche.iguide.poi.domain.PointOfInterest;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import eu.uniche.iguide.route.domain.Route;
 import eu.uniche.iguide.route.domain.RouteStop;
 import eu.uniche.iguide.route.infrastructure.RouteRepository;
@@ -24,7 +26,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Applies one lifecycle transition ({@code 03} section 1). Activation needs the default-language title
  * and at least one stop whose Point of Interest is ACTIVE. Deactivation and archival are refused with
- * {@code RESOURCE_IN_USE} while a non-archived Guide references the Route.
+ * {@code RESOURCE_IN_USE} while a non-archived Guide references the Route. Leaving ACTIVE discards the Route's
+ * working copy ({@code 03} section 1).
  */
 @Service
 public class ChangeRouteStatusUseCase {
@@ -34,16 +37,18 @@ public class ChangeRouteStatusUseCase {
     private final RouteRules rules;
     private final RouteRepository routes;
     private final GetRouteQuery getRoute;
+    private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
 
     public ChangeRouteStatusUseCase(ProjectAccessGateway accessGateway, ProjectLanguageLookup languages,
                                     RouteRules rules, RouteRepository routes, GetRouteQuery getRoute,
-                                    TransactionTemplate transactionTemplate) {
+                                    WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate) {
         this.accessGateway = accessGateway;
         this.languages = languages;
         this.rules = rules;
         this.routes = routes;
         this.getRoute = getRoute;
+        this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -62,6 +67,9 @@ public class ChangeRouteStatusUseCase {
                 if (!references.isEmpty()) {
                     throw new ResourceInUseException("The route is still used by other resources.", references);
                 }
+            }
+            if (target != ResourceStatus.ACTIVE) {
+                workingCopies.dropFor(projectId, WorkingCopyResourceType.ROUTE, routeId);
             }
             route.changeStatus(target, principal.subject(), Instant.now());
             return rules.view(routes.saveAndFlush(route));

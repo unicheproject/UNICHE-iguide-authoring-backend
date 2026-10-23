@@ -15,8 +15,8 @@ import java.util.stream.Collectors;
 
 /**
  * A Point of Interest with its translations keyed by language code and the ids of its Categories (at most
- * one, {@code 11} section 3 carries them as {@code categoryIds}). {@code hasWorkingCopy} is always
- * false until working copies exist (GAPS.md G-027).
+ * one, {@code 11} section 3 carries them as {@code categoryIds}). {@code hasWorkingCopy} and
+ * {@code workingCopyUpdatedAt} tell whether it has pending changes ({@code 07} section 14).
  */
 public record PoiResponse(UUID id, UUID projectId, UUID placeId, String slug, String code, ResourceStatus status,
                           String internalName, BigDecimal latitude, BigDecimal longitude,
@@ -26,13 +26,17 @@ public record PoiResponse(UUID id, UUID projectId, UUID placeId, String slug, St
                           List<UUID> categoryIds, List<AssetResponse.Binding> media) {
 
     public static PoiResponse from(PoiView view) {
+        return from(view, null);
+    }
+
+    public static PoiResponse from(PoiView view, Instant workingCopyUpdatedAt) {
         PointOfInterest p = view.poi();
         Map<String, PoiTranslationBody> translations = view.translations().stream()
                 .collect(Collectors.toMap(PoiTranslation::getLanguageCode, PoiTranslationBody::from,
                         (a, b) -> a, TreeMap::new));
         return new PoiResponse(p.getId(), p.getProjectId(), p.getPlaceId(), p.getSlug(), p.getCode(), p.getStatus(),
                 p.getInternalName(), p.getLatitude(), p.getLongitude(), p.getEstimatedVisitMinutes(), p.isFeatured(),
-                p.getSortOrder(), p.getArchivedAt(), p.getCreatedAt(), p.getUpdatedAt(), p.getVersion(), false, null,
-                translations, view.categoryIds(), view.media().stream().map(AssetResponse.Binding::from).toList());
+                p.getSortOrder(), p.getArchivedAt(), p.getCreatedAt(), p.getUpdatedAt(), p.getVersion(),
+                workingCopyUpdatedAt != null, workingCopyUpdatedAt, translations, view.categoryIds(), view.media().stream().map(AssetResponse.Binding::from).toList());
     }
 }

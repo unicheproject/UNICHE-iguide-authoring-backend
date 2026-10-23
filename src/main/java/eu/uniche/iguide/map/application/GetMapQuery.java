@@ -9,10 +9,13 @@ import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.resource.application.PageRequests;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 /** Reads maps, their placements, and their references. */
@@ -32,13 +35,21 @@ public class GetMapQuery {
         this.placements = placements;
     }
 
-    /** Maps have no {@code sortOrder}, so they list most recently updated first ({@code 06} section 16). */
-    public Page<GeographicMap> list(UUID projectId, UnichePrincipal principal, ResourceStatus status, Integer page,
-                                    Integer size) {
+    /**
+     * Maps have no {@code sortOrder}, so they list most recently updated first ({@code 06} section 16), filtered
+     * by status and by {@code pending}, the maps with a working copy ({@code 07} section 14).
+     */
+    public Page<GeographicMap> list(UUID projectId, UnichePrincipal principal, ResourceStatus status, boolean pending,
+                                    Integer page, Integer size) {
         accessGateway.requireAccess(projectId, principal);
-        var pageable = PageRequests.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt"));
-        return status == null ? maps.findByProjectId(projectId, pageable)
-                : maps.findByProjectIdAndStatus(projectId, status, pageable);
+        Specification<GeographicMap> spec = (root, query, cb) -> cb.equal(root.get("projectId"), projectId);
+        if (status != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
+        }
+        if (pending) {
+            spec = spec.and(WorkingCopyStore.pending(projectId, WorkingCopyResourceType.GEOGRAPHIC_MAP));
+        }
+        return maps.findAll(spec, PageRequests.of(page, size, Sort.by(Sort.Direction.DESC, "updatedAt")));
     }
 
     public GeographicMap get(UUID projectId, UUID mapId, UnichePrincipal principal) {

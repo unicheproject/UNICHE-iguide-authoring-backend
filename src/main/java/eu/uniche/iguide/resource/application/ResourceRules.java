@@ -99,14 +99,20 @@ public final class ResourceRules {
     }
 
     /**
-     * An {@code ACTIVE} Resource is edited only through its working copy (AGENTS.md section 4 rule 13),
-     * which does not exist yet (GAPS.md G-027), so only {@code DRAFT} Resources are edited directly.
+     * Only a {@code DRAFT} Resource is edited directly. An {@code ACTIVE} one is edited through its working copy
+     * (AGENTS.md section 4 rule 13, {@code PUT .../working-copy}, DECISIONS.md D-027); an {@code ARCHIVED} one is
+     * restored first.
      */
     public static void requireDraft(ResourceStatus status, String kind) {
+        if (status == ResourceStatus.ACTIVE) {
+            throw new ValidationFailedException("An ACTIVE " + kind + " is edited through its working copy.",
+                    List.of(new ErrorItem("status", "RESOURCE_NOT_EDITABLE",
+                            "Save the changes with PUT .../working-copy and apply them.")));
+        }
         if (status != ResourceStatus.DRAFT) {
             throw new ValidationFailedException("Only a DRAFT " + kind + " can be edited directly.",
                     List.of(new ErrorItem("status", "RESOURCE_NOT_EDITABLE",
-                            "Deactivate or restore the " + kind + " to DRAFT before editing it.")));
+                            "Restore the " + kind + " to DRAFT before editing it.")));
         }
     }
 

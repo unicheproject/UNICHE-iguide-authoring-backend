@@ -15,7 +15,10 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Saves a DRAFT map: its view, bounds, Place link, visibility, and visitor filter. */
+/**
+ * Saves a DRAFT map: its view, bounds, Place link, visibility, and visitor filter. An ACTIVE map is edited
+ * through its working copy, whose save and apply reuse {@link #write} (DECISIONS.md D-027).
+ */
 @Service
 public class UpdateMapUseCase {
 
@@ -39,12 +42,21 @@ public class UpdateMapUseCase {
             GeographicMap map = rules.requireMap(projectId, mapId);
             ResourceRules.requireCurrentVersion(map.getVersion(), version, "map");
             ResourceRules.requireDraft(map.getStatus(), "map");
-            List<ErrorItem> errors = new ArrayList<>();
-            MapView checked = rules.checkView(projectId, view, mapId, errors);
-            rules.checkVisibility(projectId, visibility, errors);
-            ResourceRules.throwIfAny(errors, "The map is invalid.");
-            map.edit(checked, visibility, visitorFilterEnabled, principal.subject(), Instant.now());
-            return maps.saveAndFlush(map);
+            return write(projectId, map, principal, view, visibility, visitorFilterEnabled);
         });
+    }
+
+    /**
+     * Validates and writes the editable state onto the map, inside the caller's transaction, without a status
+     * or version check: the DRAFT save above and the working copy of an ACTIVE map share it.
+     */
+    public GeographicMap write(UUID projectId, GeographicMap map, UnichePrincipal principal, MapView view,
+                               MapVisibility visibility, boolean visitorFilterEnabled) {
+        List<ErrorItem> errors = new ArrayList<>();
+        MapView checked = rules.checkView(projectId, view, map.getId(), errors);
+        rules.checkVisibility(projectId, visibility, errors);
+        ResourceRules.throwIfAny(errors, "The map is invalid.");
+        map.edit(checked, visibility, visitorFilterEnabled, principal.subject(), Instant.now());
+        return maps.saveAndFlush(map);
     }
 }

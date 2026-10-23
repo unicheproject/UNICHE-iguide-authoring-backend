@@ -23,9 +23,13 @@ public final class EventRequests {
                          String internalName, boolean featured, Map<String, EventTranslationBody> translations) {
 
         Map<String, EventTranslationInput> translationInputs() {
-            return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
-                    Map.Entry::getKey, e -> e.getValue().toInput()));
+            return inputs(translations);
         }
+    }
+
+    static Map<String, EventTranslationInput> inputs(Map<String, EventTranslationBody> translations) {
+        return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey, e -> e.getValue().toInput()));
     }
 
     /** One occurrence; instants in ISO-8601. A missing status means {@code SCHEDULED}. */

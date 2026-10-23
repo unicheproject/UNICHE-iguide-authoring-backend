@@ -181,6 +181,18 @@ None open. Q-002 and Q-003 were resolved on 2026-10-02 and are kept here for ref
   `cooldownSeconds` (`03` §14 asks for a proximity threshold and a cooldown); one identity per Project.
 - Assumption taken: as proposed (D-026).
 
+### Q-016 — Reading a working copy, and the shape of its save
+
+- Kind: spec-change-request
+- Source: `07` §14: "`/api/v1/projects/{projectId}/{kind}/{id}/working-copy` PUT, DELETE"; `12` §4:
+  "opening the editor of an `ACTIVE` Resource loads its `ResourceWorkingCopy` when one exists".
+- Finding: no path reads a copy, and the `PUT` body is described only as "the full payload".
+- Proposed: add `GET .../working-copy` returning the copy (`baseVersion`, `version`, `payload`, timestamps,
+  `updatedBySubject`) with `resource`, the kind's read DTO as it would read after apply, or `errors` when it
+  no longer passes the rules; define the `PUT` body as `{baseVersion, workingCopyVersion, payload}` with the
+  rules of D-027.
+- Assumption taken: as proposed (D-027).
+
 ### Open decisions of `09` that shape the next milestones
 
 | `09` | Shapes or blocks |

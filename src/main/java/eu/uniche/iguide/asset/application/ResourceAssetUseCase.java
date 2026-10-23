@@ -10,8 +10,10 @@ import eu.uniche.iguide.platform.web.DuplicateValueException;
 import eu.uniche.iguide.platform.web.ErrorItem;
 import eu.uniche.iguide.platform.web.ResourceNotFoundException;
 import eu.uniche.iguide.platform.web.ValidationFailedException;
+import eu.uniche.iguide.resource.application.ErrorPaths;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -25,8 +27,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * The media of a Point of Interest, Route, Guide, or Event ({@code 07} section 14:
  * {@code .../{kind}/{id}/resource-assets}, {@code .../{bindingId}}, {@code .../resource-assets:order}).
- * Only a DRAFT Resource changes its media until working copies exist. {@code INLINE} rows follow the rich
- * text and are never written here.
+ * These endpoints change the media of a DRAFT Resource; an ACTIVE one changes it through its working copy,
+ * which calls {@link #replace} on apply (DECISIONS.md D-027). {@code INLINE} rows follow the rich text and are
+ * never written here.
  */
 @Service
 public class ResourceAssetUseCase {
@@ -44,6 +47,10 @@ public class ResourceAssetUseCase {
         this.transactionTemplate = transactionTemplate;
     }
 
+    /** One wanted binding of a working-copy payload. */
+    public record Media(UUID assetId, AssetUsage usage, String languageCode) {
+    }
+
     public List<ResourceAsset> list(UUID projectId, AssetResourceType kind, UUID resourceId, UnichePrincipal principal) {
         accessGateway.requireAccess(projectId, principal);
         rules.requireResource(projectId, kind, resourceId);
@@ -59,36 +66,7 @@ public class ResourceAssetUseCase {
         accessGateway.requireAccess(projectId, principal);
         return transactionTemplate.execute(status -> {
             ResourceRules.requireDraft(rules.requireResource(projectId, kind, resourceId), kind.label());
-            List<ErrorItem> errors = new ArrayList<>();
-            if (usage == null) {
-                errors.add(new ErrorItem("usage", "REQUIRED", "Choose a usage."));
-            } else if (usage == AssetUsage.INLINE) {
-                errors.add(new ErrorItem("usage", "NOT_ALLOWED", "INLINE media follows the images in rich text."));
-            }
-            String language = ResourceRules.trimToNull(rawLanguage);
-            if (language != null && !rules.enabledLanguages(projectId).contains(language)) {
-                errors.add(new ErrorItem("languageCode", "UNKNOWN_LANGUAGE", "Is not a language of this project."));
-            }
-            rules.checkBindable(projectId, assetId, usage == AssetUsage.INLINE ? null : usage, "assetId", errors);
-            ResourceRules.throwIfAny(errors, "The asset cannot be bound.");
-
-            List<ResourceAsset> current = bindingsOf(projectId, kind, resourceId);
-            boolean taken = current.stream().anyMatch(b -> b.getUsage() == usage
-                    && Objects.equals(b.getLanguageCode(), language)
-                    && (usage.isSingle() || b.getAssetId().equals(assetId)));
-            if (taken) {
-                throw new DuplicateValueException("usage", usage.isSingle()
-                        ? "The " + kind.label() + " already has a " + usage + (language == null ? "" : " in " + language)
-                        + "; remove it first."
-                        : "The asset is already in this " + usage + (language == null ? "" : " in " + language) + ".");
-            }
-            if (usage == AssetUsage.MODEL && current.stream().noneMatch(b -> b.getUsage() == AssetUsage.MODEL_POSTER
-                    && (b.getLanguageCode() == null || Objects.equals(b.getLanguageCode(), language)))) {
-                throw new ValidationFailedException("A 3D model needs its poster image.", List.of(new ErrorItem(
-                        "usage", "MODEL_POSTER_REQUIRED", "Bind a MODEL_POSTER image before the MODEL.")));
-            }
-            return bindings.saveAndFlush(ResourceAsset.of(projectId, kind, resourceId, assetId, usage, language,
-                    bindings.findMaxSortOrder(projectId, kind, resourceId) + 1));
+            return bindIn(projectId, kind, resourceId, assetId, usage, rawLanguage);
         });
     }
 
@@ -106,10 +84,7 @@ public class ResourceAssetUseCase {
             if (binding.getUsage() == AssetUsage.MODEL_POSTER) {
                 List<ResourceAsset> rest = bindingsOf(projectId, kind, resourceId).stream()
                         .filter(b -> !b.getId().equals(bindingId)).toList();
-                boolean orphaned = rest.stream().anyMatch(model -> model.getUsage() == AssetUsage.MODEL
-                        && rest.stream().noneMatch(p -> p.getUsage() == AssetUsage.MODEL_POSTER
-                        && (p.getLanguageCode() == null || Objects.equals(p.getLanguageCode(), model.getLanguageCode()))));
-                if (orphaned) {
+                if (hasOrphanedModel(rest)) {
                     throw new ValidationFailedException("A 3D model needs its poster image.", List.of(new ErrorItem(
                             "usage", "MODEL_POSTER_REQUIRED", "Remove the MODEL before its poster.")));
                 }
@@ -136,18 +111,112 @@ public class ResourceAssetUseCase {
                         List.of(new ErrorItem("ids", "INCOMPLETE_ORDER",
                                 "List every binding of this " + kind.label() + " except INLINE ones exactly once.")));
             }
-            int position = 0;
-            for (UUID id : ids) {
-                ordered.get(id).moveTo(position++);
-            }
-            for (ResourceAsset inline : current) {
-                if (inline.getUsage() == AssetUsage.INLINE) {
-                    inline.moveTo(position++);
-                }
-            }
-            bindings.saveAllAndFlush(current);
+            List<ResourceAsset> inOrder = new ArrayList<>();
+            ids.forEach(id -> inOrder.add(ordered.get(id)));
+            placeInOrder(inOrder, current);
             return bindingsOf(projectId, kind, resourceId);
         });
+    }
+
+    /**
+     * Makes the non-INLINE media of a Resource exactly {@code wanted}, in that order, inside the caller's
+     * transaction and without a status check: the apply of a working copy (DECISIONS.md D-027). A binding that
+     * matches a wanted entry is kept; the others are removed and the missing ones bound with the same rules as
+     * {@link #bind}. Errors are reported at {@code media[i]}.
+     */
+    public void replace(UUID projectId, AssetResourceType kind, UUID resourceId, List<Media> wanted) {
+        List<Media> desired = wanted == null ? List.of() : wanted;
+        List<ResourceAsset> remaining = new ArrayList<>(bindingsOf(projectId, kind, resourceId).stream()
+                .filter(b -> b.getUsage() != AssetUsage.INLINE).toList());
+        ResourceAsset[] matched = new ResourceAsset[desired.size()];
+        for (int i = 0; i < desired.size(); i++) {
+            Media media = desired.get(i);
+            String language = ResourceRules.trimToNull(media.languageCode());
+            ResourceAsset match = remaining.stream()
+                    .filter(b -> b.getAssetId().equals(media.assetId()) && b.getUsage() == media.usage()
+                            && Objects.equals(b.getLanguageCode(), language))
+                    .findFirst().orElse(null);
+            if (match != null) {
+                remaining.remove(match);
+                matched[i] = match;
+            }
+        }
+        bindings.deleteAll(remaining);
+        bindings.flush();
+
+        // Posters before the models that need them.
+        List<Integer> missing = new ArrayList<>();
+        for (int i = 0; i < desired.size(); i++) {
+            if (matched[i] == null) {
+                missing.add(i);
+            }
+        }
+        missing.sort(Comparator.comparing(i -> desired.get(i).usage() == AssetUsage.MODEL ? 1 : 0));
+        for (int i : missing) {
+            Media media = desired.get(i);
+            matched[i] = ErrorPaths.within("media[" + i + "]",
+                    () -> bindIn(projectId, kind, resourceId, media.assetId(), media.usage(), media.languageCode()));
+        }
+        List<ResourceAsset> current = bindingsOf(projectId, kind, resourceId);
+        if (hasOrphanedModel(current)) {
+            throw new ValidationFailedException("A 3D model needs its poster image.", List.of(new ErrorItem(
+                    "media", "MODEL_POSTER_REQUIRED", "Keep a MODEL_POSTER image for every MODEL.")));
+        }
+        placeInOrder(List.of(matched), current);
+    }
+
+    private ResourceAsset bindIn(UUID projectId, AssetResourceType kind, UUID resourceId, UUID assetId,
+                                 AssetUsage usage, String rawLanguage) {
+        List<ErrorItem> errors = new ArrayList<>();
+        if (usage == null) {
+            errors.add(new ErrorItem("usage", "REQUIRED", "Choose a usage."));
+        } else if (usage == AssetUsage.INLINE) {
+            errors.add(new ErrorItem("usage", "NOT_ALLOWED", "INLINE media follows the images in rich text."));
+        }
+        String language = ResourceRules.trimToNull(rawLanguage);
+        if (language != null && !rules.enabledLanguages(projectId).contains(language)) {
+            errors.add(new ErrorItem("languageCode", "UNKNOWN_LANGUAGE", "Is not a language of this project."));
+        }
+        rules.checkBindable(projectId, assetId, usage == AssetUsage.INLINE ? null : usage, "assetId", errors);
+        ResourceRules.throwIfAny(errors, "The asset cannot be bound.");
+
+        List<ResourceAsset> current = bindingsOf(projectId, kind, resourceId);
+        boolean taken = current.stream().anyMatch(b -> b.getUsage() == usage
+                && Objects.equals(b.getLanguageCode(), language)
+                && (usage.isSingle() || b.getAssetId().equals(assetId)));
+        if (taken) {
+            throw new DuplicateValueException("usage", usage.isSingle()
+                    ? "The " + kind.label() + " already has a " + usage + (language == null ? "" : " in " + language)
+                    + "; remove it first."
+                    : "The asset is already in this " + usage + (language == null ? "" : " in " + language) + ".");
+        }
+        if (usage == AssetUsage.MODEL && current.stream().noneMatch(b -> b.getUsage() == AssetUsage.MODEL_POSTER
+                && (b.getLanguageCode() == null || Objects.equals(b.getLanguageCode(), language)))) {
+            throw new ValidationFailedException("A 3D model needs its poster image.", List.of(new ErrorItem(
+                    "usage", "MODEL_POSTER_REQUIRED", "Bind a MODEL_POSTER image before the MODEL.")));
+        }
+        return bindings.saveAndFlush(ResourceAsset.of(projectId, kind, resourceId, assetId, usage, language,
+                bindings.findMaxSortOrder(projectId, kind, resourceId) + 1));
+    }
+
+    private static boolean hasOrphanedModel(List<ResourceAsset> bindings) {
+        return bindings.stream().anyMatch(model -> model.getUsage() == AssetUsage.MODEL
+                && bindings.stream().noneMatch(p -> p.getUsage() == AssetUsage.MODEL_POSTER
+                && (p.getLanguageCode() == null || Objects.equals(p.getLanguageCode(), model.getLanguageCode()))));
+    }
+
+    /** The given bindings first, in that order, then the INLINE ones of {@code current}. */
+    private void placeInOrder(List<ResourceAsset> inOrder, List<ResourceAsset> current) {
+        int position = 0;
+        for (ResourceAsset binding : inOrder) {
+            binding.moveTo(position++);
+        }
+        for (ResourceAsset inline : current) {
+            if (inline.getUsage() == AssetUsage.INLINE) {
+                inline.moveTo(position++);
+            }
+        }
+        bindings.saveAllAndFlush(current);
     }
 
     private List<ResourceAsset> bindingsOf(UUID projectId, AssetResourceType kind, UUID resourceId) {

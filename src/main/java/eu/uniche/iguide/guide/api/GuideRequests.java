@@ -25,9 +25,14 @@ public final class GuideRequests {
                          boolean featured, Map<String, GuideTranslationBody> translations) {
 
         Map<String, GuideTranslationInput> translationInputs() {
-            return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
-                    Map.Entry::getKey, e -> new GuideTranslationInput(e.getValue().title(), e.getValue().summary())));
+            return guideInputs(translations);
         }
+    }
+
+    static Map<String, GuideTranslationInput> guideInputs(Map<String, GuideTranslationBody> translations) {
+        return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey, e -> e.getValue() == null ? new GuideTranslationInput(null, null)
+                        : new GuideTranslationInput(e.getValue().title(), e.getValue().summary())));
     }
 
     public record GuideTranslationBody(String title, String summary) {
@@ -41,10 +46,14 @@ public final class GuideRequests {
                         Map<String, BlockTranslationBody> translations) {
 
         Map<String, BlockTranslationInput> translationInputs() {
-            return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
-                    Map.Entry::getKey, e -> e.getValue() == null ? new BlockTranslationInput(null, null)
-                            : new BlockTranslationInput(e.getValue().text(), e.getValue().caption())));
+            return blockInputs(translations);
         }
+    }
+
+    static Map<String, BlockTranslationInput> blockInputs(Map<String, BlockTranslationBody> translations) {
+        return translations == null ? Map.of() : translations.entrySet().stream().collect(Collectors.toMap(
+                Map.Entry::getKey, e -> e.getValue() == null ? new BlockTranslationInput(null, null)
+                        : new BlockTranslationInput(e.getValue().text(), e.getValue().caption())));
     }
 
     /** {@code text} for a TEXT block, {@code caption} for a REFERENCE block. */
