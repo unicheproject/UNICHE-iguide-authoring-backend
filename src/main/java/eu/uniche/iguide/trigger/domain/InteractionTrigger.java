@@ -1,5 +1,6 @@
 package eu.uniche.iguide.trigger.domain;
 
+import eu.uniche.iguide.surface.domain.Surface;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

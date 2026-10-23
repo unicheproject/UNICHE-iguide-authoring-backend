@@ -1,5 +1,6 @@
 package eu.uniche.iguide.trigger.domain;
 
+import eu.uniche.iguide.surface.domain.Surface;
 import java.util.EnumSet;
 import java.util.Set;
 

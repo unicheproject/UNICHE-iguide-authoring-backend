@@ -7,7 +7,7 @@ import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
 import eu.uniche.iguide.trigger.domain.InteractionTrigger;
-import eu.uniche.iguide.trigger.domain.Surface;
+import eu.uniche.iguide.surface.domain.Surface;
 import eu.uniche.iguide.trigger.domain.TriggerTargetType;
 import eu.uniche.iguide.trigger.domain.TriggerType;
 import eu.uniche.iguide.trigger.infrastructure.InteractionTriggerRepository;

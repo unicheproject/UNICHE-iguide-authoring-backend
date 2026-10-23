@@ -1,6 +1,6 @@
 package eu.uniche.iguide.trigger.api;
 
-import eu.uniche.iguide.trigger.domain.Surface;
+import eu.uniche.iguide.surface.domain.Surface;
 import eu.uniche.iguide.trigger.domain.TriggerTargetType;
 import eu.uniche.iguide.trigger.domain.TriggerType;
 import jakarta.validation.constraints.NotNull;

@@ -11,6 +11,9 @@ import eu.uniche.iguide.trigger.domain.TriggerTargetType;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
+import java.util.function.Function;
+import org.springframework.data.domain.Page;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,8 +48,10 @@ public class TriggerController {
                                               @RequestParam(required = false) ResourceStatus status,
                                               @RequestParam(required = false) Integer page,
                                               @RequestParam(required = false) Integer size) {
-        return PageResponse.of(query.list(projectId, CurrentPrincipal.require(), targetResourceType, targetResourceId,
-                status, page, size), TriggerResponse::from);
+        Page<InteractionTrigger> triggers = query.list(projectId, CurrentPrincipal.require(), targetResourceType,
+                targetResourceId, status, page, size);
+        Function<InteractionTrigger, String> urls = query.runtimeUrls(projectId);
+        return PageResponse.of(triggers, t -> TriggerResponse.from(t, urls.apply(t)));
     }
 
     @PostMapping
@@ -55,31 +60,38 @@ public class TriggerController {
                 request.targetResourceId(), request.triggerType(), request.code(), request.supportedSurfaces(),
                 request.configuration());
         return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/triggers/" + created.getId()))
-                .body(TriggerResponse.from(created));
+                .body(response(projectId, created));
     }
 
     @GetMapping("/{triggerId}")
     public TriggerResponse get(@PathVariable UUID projectId, @PathVariable UUID triggerId) {
-        return TriggerResponse.from(query.get(projectId, triggerId, CurrentPrincipal.require()));
+        return response(projectId, query.get(projectId, triggerId, CurrentPrincipal.require()));
     }
 
     @PutMapping("/{triggerId}")
     public TriggerResponse update(@PathVariable UUID projectId, @PathVariable UUID triggerId,
                                   @Valid @RequestBody TriggerRequests.Update request) {
-        return TriggerResponse.from(useCase.update(projectId, triggerId, CurrentPrincipal.require(), request.version(),
+        return response(projectId, useCase.update(projectId, triggerId, CurrentPrincipal.require(), request.version(),
                 request.code(), request.supportedSurfaces(), request.configuration()));
     }
 
     @PostMapping("/{triggerId}/status")
     public TriggerResponse changeStatus(@PathVariable UUID projectId, @PathVariable UUID triggerId,
                                         @Valid @RequestBody ChangeStatusRequest request) {
-        return TriggerResponse.from(useCase.changeStatus(projectId, triggerId, CurrentPrincipal.require(),
+        return response(projectId, useCase.changeStatus(projectId, triggerId, CurrentPrincipal.require(),
                 request.targetStatus(), request.version()));
     }
 
     @GetMapping(path = "/{triggerId}/qr.png", produces = {MediaType.IMAGE_PNG_VALUE, MediaType.APPLICATION_JSON_VALUE})
     public ResponseEntity<byte[]> qrImage(@PathVariable UUID projectId, @PathVariable UUID triggerId) {
+        byte[] image = query.qrImage(projectId, triggerId, CurrentPrincipal.require());
         return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG)
-                .body(query.qrImage(projectId, triggerId, CurrentPrincipal.require()));
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"qr.png\"")
+                .body(image);
+    }
+
+    /** The access check ran in the use case or query that produced the trigger. */
+    private TriggerResponse response(UUID projectId, InteractionTrigger trigger) {
+        return TriggerResponse.from(trigger, query.runtimeUrls(projectId).apply(trigger));
     }
 }

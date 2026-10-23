@@ -31,6 +31,8 @@
         <testcontainers.version>1.21.3</testcontainers.version>
         <!-- Outside the Spring Boot BOM: the S3 client for asset storage (`07` section 10). -->
         <awssdk.version>2.46.7</awssdk.version>
+        <!-- Outside the Spring Boot BOM: QR images of QR code triggers (`07` section 14, DECISIONS.md D-029). -->
+        <zxing.version>3.5.3</zxing.version>
     </properties>
 
     <dependencyManagement>
@@ -92,6 +94,11 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>core</artifactId>
+            <version>${zxing.version}</version>
         </dependency>
 
         <dependency>
