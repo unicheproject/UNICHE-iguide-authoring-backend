@@ -13,10 +13,13 @@ public class GetGuideQuery {
 
     private final ProjectAccessGateway accessGateway;
     private final GuideRules rules;
+    private final List<GuideReferenceSource> referenceSources;
 
-    public GetGuideQuery(ProjectAccessGateway accessGateway, GuideRules rules) {
+    public GetGuideQuery(ProjectAccessGateway accessGateway, GuideRules rules,
+                         List<GuideReferenceSource> referenceSources) {
         this.accessGateway = accessGateway;
         this.rules = rules;
+        this.referenceSources = referenceSources;
     }
 
     public GuideView execute(UUID projectId, UUID guideId, UnichePrincipal principal) {
@@ -29,12 +32,17 @@ public class GetGuideQuery {
     }
 
     /**
-     * Navigation items and Interaction Triggers refer to Guides ({@code 03} section 1); neither exists yet,
-     * so nothing does.
+     * Interaction Triggers refer to Guides ({@code 03} section 1); Navigation items will once Navigation exists.
      */
     public List<ResourceReference> references(UUID projectId, UUID guideId, UnichePrincipal principal) {
         accessGateway.requireAccess(projectId, principal);
         rules.requireGuide(projectId, guideId);
-        return List.of();
+        return referencesTo(projectId, guideId);
+    }
+
+    List<ResourceReference> referencesTo(UUID projectId, UUID guideId) {
+        return referenceSources.stream()
+                .flatMap(source -> source.referencesTo(projectId, guideId).stream())
+                .toList();
     }
 }

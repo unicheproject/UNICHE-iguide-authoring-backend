@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Implemented by each kind that can refer to a Place (Geographic Maps, Floor Plans, and later Events
- * and Guides), so this package learns of references without depending on those kinds.
+ * Implemented by each kind that can refer to a Place (Geographic Maps, Floor Plans, Interaction Triggers, and
+ * later Events and Guides), so this package learns of references without depending on those kinds.
  */
 public interface PlaceReferenceSource {
 

@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Implemented by each kind that can refer to an Event (Guides now; Navigation, Pages, and Triggers as
+ * Implemented by each kind that can refer to an Event (Guides and Interaction Triggers now; Navigation and Pages as
  * they land), so this package learns of references without depending on those kinds.
  */
 public interface EventReferenceSource {

@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Implemented by each kind that can refer to a Route (Guides now; Events, Navigation, and Triggers as
- * they land), so this package learns of references without depending on those kinds.
+ * Implemented by each kind that can refer to a Route (Guides and Interaction Triggers now; Events and Navigation
+ * as they land), so this package learns of references without depending on those kinds.
  */
 public interface RouteReferenceSource {
 

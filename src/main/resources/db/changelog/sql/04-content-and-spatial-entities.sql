@@ -694,3 +694,14 @@ COMMENT ON COLUMN interaction_triggers.configuration IS
     'BEACON: uuid, major, minor, proximityMeters, cooldownSeconds. GEO_PROXIMITY: latitude, longitude, radiusMeters, cooldownSeconds.';
 COMMENT ON COLUMN interaction_triggers.sort_order IS 'The order of the triggers of one Resource in its editor.';
 --rollback DROP TABLE interaction_triggers;
+
+--changeset iguide:0034-widen-interaction-trigger-targets
+--comment Triggers open Places, Routes, Guides, and Events as well as Points of Interest (DECISIONS.md D-028)
+ALTER TABLE interaction_triggers DROP CONSTRAINT ck_interaction_triggers_target_type;
+ALTER TABLE interaction_triggers ADD CONSTRAINT ck_interaction_triggers_target_type
+    CHECK (target_resource_type IN ('POI', 'PLACE', 'ROUTE', 'GUIDE', 'EVENT'));
+COMMENT ON COLUMN interaction_triggers.target_resource_type IS
+    'The kind of the Resource the trigger opens; a Route Stop is opened by its Point of Interest''s triggers (DECISIONS.md D-028).';
+--rollback COMMENT ON COLUMN interaction_triggers.target_resource_type IS 'Points of Interest only so far; other kinds join with their editors (DECISIONS.md D-026).';
+--rollback ALTER TABLE interaction_triggers DROP CONSTRAINT ck_interaction_triggers_target_type;
+--rollback ALTER TABLE interaction_triggers ADD CONSTRAINT ck_interaction_triggers_target_type CHECK (target_resource_type IN ('POI'));

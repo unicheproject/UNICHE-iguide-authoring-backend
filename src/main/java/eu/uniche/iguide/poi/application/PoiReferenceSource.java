@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Implemented by each kind that can refer to a Point of Interest (Geographic Maps and Floor Plans now;
- * Routes, Guides, Events, and Interaction Triggers as they land), so this package learns of references
+ * Implemented by each kind that can refer to a Point of Interest (Geographic Maps, Floor Plans, and
+ * Interaction Triggers now; others as they land), so this package learns of references
  * without depending on those kinds.
  */
 public interface PoiReferenceSource {
