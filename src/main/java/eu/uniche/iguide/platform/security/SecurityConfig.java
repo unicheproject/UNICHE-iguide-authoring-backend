@@ -103,7 +103,8 @@ public class SecurityConfig {
                 List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id",
                 "If-None-Match"));
-        configuration.setExposedHeaders(List.of("X-Request-Id", "ETag", "Location"));
+        // X-Working-Copy-Version: the copy's version after a translation saved into it (DECISIONS.md D-031).
+        configuration.setExposedHeaders(List.of("X-Request-Id", "ETag", "Location", "X-Working-Copy-Version"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
