@@ -24,7 +24,9 @@
          Row-Level Security policies. -->
 
     <include file="sql/01-integration-and-project-tenancy.sql" relativeToChangelogFile="true"/>
+    <include file="sql/02-templates-and-themes.sql" relativeToChangelogFile="true"/>
     <include file="sql/03-assets-and-localization.sql" relativeToChangelogFile="true"/>
     <include file="sql/04-content-and-spatial-entities.sql" relativeToChangelogFile="true"/>
+    <include file="sql/08-working-copies.sql" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

@@ -4,6 +4,7 @@ import eu.uniche.iguide.platform.security.CurrentPrincipal;
 import eu.uniche.iguide.platform.web.PageResponse;
 import eu.uniche.iguide.resource.api.ChangeStatusRequest;
 import eu.uniche.iguide.resource.api.OrderRequest;
+import eu.uniche.iguide.resource.application.ListParams;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
 import eu.uniche.iguide.route.application.ChangeRouteStatusUseCase;
@@ -16,10 +17,15 @@ import eu.uniche.iguide.route.application.RouteView;
 import eu.uniche.iguide.route.application.StopView;
 import eu.uniche.iguide.route.application.UpdateRouteCommand;
 import eu.uniche.iguide.route.application.UpdateRouteUseCase;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,10 +52,12 @@ public class RouteController {
     private final ChangeRouteStatusUseCase changeStatus;
     private final ReorderRoutesUseCase reorderRoutes;
     private final RouteStopUseCase stops;
+    private final WorkingCopyStore workingCopies;
 
     public RouteController(ListRoutesQuery listRoutes, GetRouteQuery getRoute, CreateRouteUseCase createRoute,
                            UpdateRouteUseCase updateRoute, ChangeRouteStatusUseCase changeStatus,
-                           ReorderRoutesUseCase reorderRoutes, RouteStopUseCase stops) {
+                           ReorderRoutesUseCase reorderRoutes, RouteStopUseCase stops,
+                           WorkingCopyStore workingCopies) {
         this.listRoutes = listRoutes;
         this.getRoute = getRoute;
         this.createRoute = createRoute;
@@ -57,16 +65,25 @@ public class RouteController {
         this.changeStatus = changeStatus;
         this.reorderRoutes = reorderRoutes;
         this.stops = stops;
+        this.workingCopies = workingCopies;
     }
 
     @GetMapping("/routes")
     public PageResponse<RouteResponse> list(@PathVariable UUID projectId,
                                             @RequestParam(required = false) ResourceStatus status,
                                             @RequestParam(required = false) String q,
+                                            @RequestParam(required = false) String language,
+                                            @RequestParam(required = false) Boolean featured,
+                                            @RequestParam(required = false) String categoryId,
+                                            @RequestParam(required = false) String sort,
+                                            @RequestParam(required = false) Boolean pending,
                                             @RequestParam(required = false) Integer page,
                                             @RequestParam(required = false) Integer size) {
-        return PageResponse.of(listRoutes.execute(projectId, CurrentPrincipal.require(), status, q, page, size),
-                RouteResponse::from);
+        Page<RouteView> result = listRoutes.execute(projectId, CurrentPrincipal.require(), categoryId, new ListParams(status, q,
+                language, featured, Boolean.TRUE.equals(pending), sort, page, size));
+        Map<UUID, Instant> copies = workingCopies.updatedAt(projectId, WorkingCopyResourceType.ROUTE,
+                result.map(view -> view.route().getId()).getContent());
+        return PageResponse.of(result, view -> RouteResponse.from(view, copies.get(view.route().getId())));
     }
 
     @PostMapping("/routes")
@@ -80,7 +97,8 @@ public class RouteController {
 
     @GetMapping("/routes/{routeId}")
     public RouteResponse get(@PathVariable UUID projectId, @PathVariable UUID routeId) {
-        return RouteResponse.from(getRoute.execute(projectId, routeId, CurrentPrincipal.require()));
+        return RouteResponse.from(getRoute.execute(projectId, routeId, CurrentPrincipal.require()),
+                workingCopies.updatedAt(projectId, WorkingCopyResourceType.ROUTE, routeId));
     }
 
     @PutMapping("/routes/{routeId}")

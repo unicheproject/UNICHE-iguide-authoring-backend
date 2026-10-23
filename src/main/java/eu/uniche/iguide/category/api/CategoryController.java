@@ -13,12 +13,18 @@ import eu.uniche.iguide.platform.security.CurrentPrincipal;
 import eu.uniche.iguide.platform.web.PageResponse;
 import eu.uniche.iguide.resource.api.ChangeStatusRequest;
 import eu.uniche.iguide.resource.api.OrderRequest;
+import eu.uniche.iguide.resource.application.ListParams;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,16 +49,19 @@ public class CategoryController {
     private final UpdateCategoryUseCase updateCategory;
     private final ChangeCategoryStatusUseCase changeStatus;
     private final ReorderCategoriesUseCase reorderCategories;
+    private final WorkingCopyStore workingCopies;
 
     public CategoryController(ListCategoriesQuery listCategories, GetCategoryQuery getCategory,
                               CreateCategoryUseCase createCategory, UpdateCategoryUseCase updateCategory,
-                              ChangeCategoryStatusUseCase changeStatus, ReorderCategoriesUseCase reorderCategories) {
+                              ChangeCategoryStatusUseCase changeStatus, ReorderCategoriesUseCase reorderCategories,
+                              WorkingCopyStore workingCopies) {
         this.listCategories = listCategories;
         this.getCategory = getCategory;
         this.createCategory = createCategory;
         this.updateCategory = updateCategory;
         this.changeStatus = changeStatus;
         this.reorderCategories = reorderCategories;
+        this.workingCopies = workingCopies;
     }
 
     @GetMapping("/categories")
@@ -60,10 +69,16 @@ public class CategoryController {
                                                @RequestParam(required = false) ResourceStatus status,
                                                @RequestParam(required = false) CategoryScope scope,
                                                @RequestParam(required = false) String q,
+                                               @RequestParam(required = false) String language,
+                                               @RequestParam(required = false) String sort,
+                                               @RequestParam(required = false) Boolean pending,
                                                @RequestParam(required = false) Integer page,
                                                @RequestParam(required = false) Integer size) {
-        return PageResponse.of(listCategories.execute(projectId, CurrentPrincipal.require(), status, scope, q, page,
-                size), CategoryResponse::from);
+        Page<CategoryView> result = listCategories.execute(projectId, CurrentPrincipal.require(), scope, new ListParams(status, q,
+                language, null, Boolean.TRUE.equals(pending), sort, page, size));
+        Map<UUID, Instant> copies = workingCopies.updatedAt(projectId, WorkingCopyResourceType.CATEGORY,
+                result.map(view -> view.category().getId()).getContent());
+        return PageResponse.of(result, view -> CategoryResponse.from(view, copies.get(view.category().getId())));
     }
 
     @PostMapping("/categories")
@@ -77,7 +92,8 @@ public class CategoryController {
 
     @GetMapping("/categories/{categoryId}")
     public CategoryResponse get(@PathVariable UUID projectId, @PathVariable UUID categoryId) {
-        return CategoryResponse.from(getCategory.execute(projectId, categoryId, CurrentPrincipal.require()));
+        return CategoryResponse.from(getCategory.execute(projectId, categoryId, CurrentPrincipal.require()),
+                workingCopies.updatedAt(projectId, WorkingCopyResourceType.CATEGORY, categoryId));
     }
 
     @PutMapping("/categories/{categoryId}")

@@ -171,7 +171,7 @@ Only commands that ran on 2026-10-02. Prerequisites: JDK 21, Docker Engine (29.x
 | Command | Needs | Result |
 |---|---|---|
 | `cp .env.example .env` | — | `.env` is gitignored; fill `DB_PASSWORD` |
-| `./mvnw -B verify` or `make verify` | Docker for Testcontainers | 173 tests pass (2026-10-19) |
+| `./mvnw -B verify` or `make verify` | Docker for Testcontainers | 240 tests pass (2026-10-23) |
 | `docker compose up --build -d` or `make infra-up` | Docker, `.env` | app healthy after about 85 s on a cold build |
 | `curl -s localhost:8080/iguide/actuator/health` or `make health` | running stack | `{"status":"UP"}` |
 | `docker compose down -v` or `make infra-down` | — | stack and volume removed |

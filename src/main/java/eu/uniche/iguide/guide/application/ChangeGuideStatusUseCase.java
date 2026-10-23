@@ -7,9 +7,13 @@ import eu.uniche.iguide.language.application.ProjectLanguageLookup;
 import eu.uniche.iguide.platform.projectaccess.ProjectAccessGateway;
 import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.platform.web.ErrorItem;
+import eu.uniche.iguide.platform.web.ResourceInUseException;
 import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
+import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,8 +23,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Applies one lifecycle transition ({@code 03} section 1). Activation needs, in the default language,
- * the title, at least one block, and text on every TEXT block. Nothing refers to a Guide until Navigation
- * and Triggers exist, so deactivation and archival are never blocked yet.
+ * the title, at least one block, and text on every TEXT block. Deactivation and archival are refused with
+ * {@code RESOURCE_IN_USE} while a non-archived trigger opens the Guide. Leaving ACTIVE discards the Guide's
+ * working copy ({@code 03} section 1).
  */
 @Service
 public class ChangeGuideStatusUseCase {
@@ -29,14 +34,19 @@ public class ChangeGuideStatusUseCase {
     private final ProjectLanguageLookup languages;
     private final GuideRules rules;
     private final GuideRepository guides;
+    private final GetGuideQuery getGuide;
+    private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
 
     public ChangeGuideStatusUseCase(ProjectAccessGateway accessGateway, ProjectLanguageLookup languages,
-                                    GuideRules rules, GuideRepository guides, TransactionTemplate transactionTemplate) {
+                                    GuideRules rules, GuideRepository guides, GetGuideQuery getGuide,
+                                    WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate) {
         this.accessGateway = accessGateway;
         this.languages = languages;
         this.rules = rules;
         this.guides = guides;
+        this.getGuide = getGuide;
+        this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -49,6 +59,15 @@ public class ChangeGuideStatusUseCase {
             ResourceRules.requireTransition(guide.getStatus(), target, "guide");
             if (target == ResourceStatus.ACTIVE) {
                 requireComplete(projectId, guide);
+            }
+            if (guide.getStatus().leavesVisitorsFor(target)) {
+                List<ResourceReference> references = getGuide.referencesTo(projectId, guideId);
+                if (!references.isEmpty()) {
+                    throw new ResourceInUseException("The guide is still used by other resources.", references);
+                }
+            }
+            if (target != ResourceStatus.ACTIVE) {
+                workingCopies.dropFor(projectId, WorkingCopyResourceType.GUIDE, guideId);
             }
             guide.changeStatus(target, principal.subject(), Instant.now());
             return rules.view(guides.saveAndFlush(guide));

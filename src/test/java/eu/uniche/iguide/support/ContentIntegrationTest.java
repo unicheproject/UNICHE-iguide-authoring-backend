@@ -56,6 +56,7 @@ public abstract class ContentIntegrationTest extends PostgresIntegrationTest {
     @AfterEach
     protected void clean() {
         jdbc.execute("""
+                DELETE FROM resource_working_copies;
                 DELETE FROM resource_assets; DELETE FROM interaction_triggers;
                 DELETE FROM floor_plan_positions; DELETE FROM floor_plans;
                 DELETE FROM asset_translations; DELETE FROM assets;
@@ -68,7 +69,7 @@ public abstract class ContentIntegrationTest extends PostgresIntegrationTest {
                 DELETE FROM route_translations; DELETE FROM routes;
                 DELETE FROM poi_translations; DELETE FROM points_of_interest;
                 DELETE FROM place_translations; DELETE FROM places;
-                DELETE FROM project_languages; DELETE FROM projects
+                DELETE FROM project_languages; DELETE FROM project_surfaces; DELETE FROM projects
                 """);
     }
 
@@ -147,6 +148,28 @@ public abstract class ContentIntegrationTest extends PostgresIntegrationTest {
 
     protected static String placeUrl(UUID projectId) {
         return "/api/v1/projects/" + projectId + "/places";
+    }
+
+    // --- Working copies ----------------------------------------------------------------------------
+
+    protected static String workingCopyUrl(UUID projectId, String kind, Object resourceId) {
+        return "/api/v1/projects/" + projectId + "/" + kind + "/" + resourceId + "/working-copy";
+    }
+
+    /** {@code PUT .../working-copy} with the given versions ({@code null} for none) and payload. */
+    protected JsonNode saveWorkingCopy(UUID projectId, String kind, Object resourceId, long baseVersion,
+                                       Long workingCopyVersion, Object payload, int expected) throws Exception {
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("baseVersion", baseVersion);
+        body.put("workingCopyVersion", workingCopyVersion);
+        body.put("payload", payload instanceof String s ? objectMapper.readValue(s, java.util.Map.class) : payload);
+        return read(mockMvc.perform(json(put(workingCopyUrl(projectId, kind, resourceId)), body))
+                .andExpect(status().is(expected)).andReturn());
+    }
+
+    protected JsonNode applyWorkingCopy(UUID projectId, String kind, Object resourceId, int expected) throws Exception {
+        return read(mockMvc.perform(authenticated(post(workingCopyUrl(projectId, kind, resourceId) + ":apply")))
+                .andExpect(status().is(expected)).andReturn());
     }
 
     private static CatalogueProjectDto catalogueProject(UUID id, String slug) {

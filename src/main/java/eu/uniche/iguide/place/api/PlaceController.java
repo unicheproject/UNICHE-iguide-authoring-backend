@@ -14,14 +14,19 @@ import eu.uniche.iguide.platform.security.CurrentPrincipal;
 import eu.uniche.iguide.platform.web.PageResponse;
 import eu.uniche.iguide.resource.api.ChangeStatusRequest;
 import eu.uniche.iguide.resource.api.OrderRequest;
+import eu.uniche.iguide.resource.application.ListParams;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,26 +51,35 @@ public class PlaceController {
     private final UpdatePlaceUseCase updatePlace;
     private final ChangePlaceStatusUseCase changeStatus;
     private final ReorderPlacesUseCase reorderPlaces;
+    private final WorkingCopyStore workingCopies;
 
     public PlaceController(ListPlacesQuery listPlaces, GetPlaceQuery getPlace, CreatePlaceUseCase createPlace,
                            UpdatePlaceUseCase updatePlace, ChangePlaceStatusUseCase changeStatus,
-                           ReorderPlacesUseCase reorderPlaces) {
+                           ReorderPlacesUseCase reorderPlaces, WorkingCopyStore workingCopies) {
         this.listPlaces = listPlaces;
         this.getPlace = getPlace;
         this.createPlace = createPlace;
         this.updatePlace = updatePlace;
         this.changeStatus = changeStatus;
         this.reorderPlaces = reorderPlaces;
+        this.workingCopies = workingCopies;
     }
 
     @GetMapping("/places")
     public PageResponse<PlaceResponse> list(@PathVariable UUID projectId,
                                             @RequestParam(required = false) ResourceStatus status,
                                             @RequestParam(required = false) String q,
+                                            @RequestParam(required = false) String language,
+                                            @RequestParam(required = false) Boolean featured,
+                                            @RequestParam(required = false) String sort,
+                                            @RequestParam(required = false) Boolean pending,
                                             @RequestParam(required = false) Integer page,
                                             @RequestParam(required = false) Integer size) {
-        return PageResponse.of(listPlaces.execute(projectId, CurrentPrincipal.require(), status, q, page, size),
-                PlaceResponse::from);
+        Page<PlaceView> result = listPlaces.execute(projectId, CurrentPrincipal.require(), new ListParams(status, q,
+                language, featured, Boolean.TRUE.equals(pending), sort, page, size));
+        Map<UUID, Instant> copies = workingCopies.updatedAt(projectId, WorkingCopyResourceType.PLACE,
+                result.map(view -> view.place().getId()).getContent());
+        return PageResponse.of(result, view -> PlaceResponse.from(view, copies.get(view.place().getId())));
     }
 
     @PostMapping("/places")
@@ -80,15 +94,14 @@ public class PlaceController {
 
     @GetMapping("/places/{placeId}")
     public PlaceResponse get(@PathVariable UUID projectId, @PathVariable UUID placeId) {
-        return PlaceResponse.from(getPlace.execute(projectId, placeId, CurrentPrincipal.require()));
+        return PlaceResponse.from(getPlace.execute(projectId, placeId, CurrentPrincipal.require()),
+                workingCopies.updatedAt(projectId, WorkingCopyResourceType.PLACE, placeId));
     }
 
     @PutMapping("/places/{placeId}")
     public PlaceResponse update(@PathVariable UUID projectId, @PathVariable UUID placeId,
                                 @Valid @RequestBody UpdatePlaceRequest request) {
-        Map<String, PlaceTranslationInput> translations = request.translations() == null ? Map.of()
-                : request.translations().entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey,
-                        e -> e.getValue().toInput()));
+        Map<String, PlaceTranslationInput> translations = inputs(request.translations());
         return PlaceResponse.from(updatePlace.execute(projectId, placeId, CurrentPrincipal.require(),
                 new UpdatePlaceCommand(request.version(), request.slug(), request.type(), request.environment(),
                         request.parentPlaceId(), request.internalName(), request.latitude(), request.longitude(),
@@ -105,6 +118,11 @@ public class PlaceController {
     @GetMapping("/places/{placeId}/references")
     public List<ResourceReference> references(@PathVariable UUID projectId, @PathVariable UUID placeId) {
         return getPlace.references(projectId, placeId, CurrentPrincipal.require());
+    }
+
+    static Map<String, PlaceTranslationInput> inputs(Map<String, PlaceTranslationBody> translations) {
+        return translations == null ? Map.of() : translations.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().toInput()));
     }
 
     @PutMapping("/places:order")

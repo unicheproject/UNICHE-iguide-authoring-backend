@@ -3,11 +3,19 @@ package eu.uniche.iguide.trigger.application;
 import eu.uniche.iguide.platform.web.DuplicateValueException;
 import eu.uniche.iguide.platform.web.ErrorItem;
 import eu.uniche.iguide.platform.web.ResourceNotFoundException;
+import eu.uniche.iguide.event.domain.Event;
+import eu.uniche.iguide.event.infrastructure.EventRepository;
+import eu.uniche.iguide.guide.domain.Guide;
+import eu.uniche.iguide.guide.infrastructure.GuideRepository;
+import eu.uniche.iguide.place.domain.Place;
+import eu.uniche.iguide.place.infrastructure.PlaceRepository;
 import eu.uniche.iguide.poi.domain.PointOfInterest;
 import eu.uniche.iguide.poi.infrastructure.PointOfInterestRepository;
+import eu.uniche.iguide.route.domain.Route;
+import eu.uniche.iguide.route.infrastructure.RouteRepository;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
 import eu.uniche.iguide.trigger.domain.InteractionTrigger;
-import eu.uniche.iguide.trigger.domain.Surface;
+import eu.uniche.iguide.surface.domain.Surface;
 import eu.uniche.iguide.trigger.domain.TriggerTargetType;
 import eu.uniche.iguide.trigger.domain.TriggerType;
 import eu.uniche.iguide.trigger.infrastructure.InteractionTriggerRepository;
@@ -46,10 +54,19 @@ public class TriggerRules {
 
     private final InteractionTriggerRepository triggers;
     private final PointOfInterestRepository pois;
+    private final PlaceRepository places;
+    private final RouteRepository routes;
+    private final GuideRepository guides;
+    private final EventRepository events;
 
-    public TriggerRules(InteractionTriggerRepository triggers, PointOfInterestRepository pois) {
+    public TriggerRules(InteractionTriggerRepository triggers, PointOfInterestRepository pois, PlaceRepository places,
+                        RouteRepository routes, GuideRepository guides, EventRepository events) {
         this.triggers = triggers;
         this.pois = pois;
+        this.places = places;
+        this.routes = routes;
+        this.guides = guides;
+        this.events = events;
     }
 
     public InteractionTrigger requireTrigger(UUID projectId, UUID triggerId) {
@@ -67,12 +84,29 @@ public class TriggerRules {
             errors.add(new ErrorItem("targetResourceId", "REQUIRED", "Choose what the trigger opens."));
             return;
         }
-        Optional<ResourceStatus> status = pois.findByProjectIdAndId(projectId, targetId).map(PointOfInterest::getStatus);
+        Optional<ResourceStatus> status = switch (type) {
+            case POI -> pois.findByProjectIdAndId(projectId, targetId).map(PointOfInterest::getStatus);
+            case PLACE -> places.findByProjectIdAndId(projectId, targetId).map(Place::getStatus);
+            case ROUTE -> routes.findByProjectIdAndId(projectId, targetId).map(Route::getStatus);
+            case GUIDE -> guides.findByProjectIdAndId(projectId, targetId).map(Guide::getStatus);
+            case EVENT -> events.findByProjectIdAndId(projectId, targetId).map(Event::getStatus);
+        };
         if (status.isEmpty()) {
-            errors.add(new ErrorItem("targetResourceId", "RESOURCE_NOT_FOUND", "No such point of interest in this project."));
+            errors.add(new ErrorItem("targetResourceId", "RESOURCE_NOT_FOUND", "No such " + type.label() + " in this project."));
         } else if (status.get() == ResourceStatus.ARCHIVED) {
-            errors.add(new ErrorItem("targetResourceId", "ARCHIVED_REFERENCE", "The point of interest is archived."));
+            errors.add(new ErrorItem("targetResourceId", "ARCHIVED_REFERENCE", "The " + type.label() + " is archived."));
         }
+    }
+
+    /** The target's slug, which its runtime URL carries ({@code 11} section 9); empty when the target is gone. */
+    public Optional<String> targetSlug(UUID projectId, TriggerTargetType type, UUID targetId) {
+        return switch (type) {
+            case POI -> pois.findByProjectIdAndId(projectId, targetId).map(PointOfInterest::getSlug);
+            case PLACE -> places.findByProjectIdAndId(projectId, targetId).map(Place::getSlug);
+            case ROUTE -> routes.findByProjectIdAndId(projectId, targetId).map(Route::getSlug);
+            case GUIDE -> guides.findByProjectIdAndId(projectId, targetId).map(Guide::getSlug);
+            case EVENT -> events.findByProjectIdAndId(projectId, targetId).map(Event::getSlug);
+        };
     }
 
     public static void checkType(TriggerType type, List<ErrorItem> errors) {

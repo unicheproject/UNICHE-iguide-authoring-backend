@@ -8,11 +8,20 @@ Keycloak and Catalogue. Frontend counterpart: `../uniche_iguide_frontend/PLAN.md
 
 ## Now
 
+### M8w — Working copies for the content kinds
+
+- Owner-instructed 2026-10-20, ahead of the rest of M8; interpretations in DECISIONS.md D-027, spec question Q-016.
+- Status: backend code and tests green (TRACEABILITY.md R13); the CMS edits ACTIVE Resources through the copy
+  (frontend D-016, unproven against the live realm).
+  Open: `contentRevision`, Audit Events, `conflictingFields`, child endpoints into the copy (G-034).
+
 ### M5t — Interaction Triggers on Points of Interest
 
 - Owner-instructed after M3; interpretations in DECISIONS.md D-026; spec question QUESTIONS.md Q-015.
 - Status: backend code and tests green (TRACEABILITY.md R12); the CMS POI editor has the "How visitors
-  reach it" card. Open: QR image and capabilities, other targets (G-033).
+  reach it" card. Since 2026-10-22 triggers also open Places, Routes, Guides, and Events (D-028, R14), with the
+  card in their editors. Since 2026-10-22 `qr.png` renders real images from the WEB surface's address (D-029,
+  R15). Open: capabilities, Pages (G-033); the rest of Surfaces (G-035).
 
 ### M3 — Assets, S3 storage, and media bindings
 
@@ -30,8 +39,8 @@ Keycloak and Catalogue. Frontend counterpart: `../uniche_iguide_frontend/PLAN.md
 ### M4c — Categories and Resource categories
 
 - Owner-instructed after M9e; interpretations in DECISIONS.md D-024; spec questions in QUESTIONS.md Q-013.
-- Status: backend code and tests green (TRACEABILITY.md R10). Open: a `categoryId` list filter on POIs and
-  Routes (the CMS filters client-side), Template seeding of `initialCategories` (M2).
+- Status: backend code and tests green (TRACEABILITY.md R10); the `categoryId` list filter exists since
+  2026-10-22 (D-030, R16). Open: Template seeding of `initialCategories` (M2).
 
 ### M1a — Remove identity and organization snapshots and the `/me` cache
 

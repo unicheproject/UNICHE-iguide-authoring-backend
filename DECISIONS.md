@@ -486,3 +486,138 @@ Append-only. An entry is never edited or removed; a later entry supersedes it by
 - Why: `03` §14, `09` §11, and `12` §3 leave these open; owner choices on types, beacon format, and QR.
 - Alternatives: a free-text beacon identifier; a temporary public address for QR images.
 - Affected specs: `03` §1, §14; `07` §14; `08` Milestone 5; `09` §11; `11` §9; `12` §3; `13` §1.
+
+## D-027 (2026-10-20) — Working copies for the content kinds (M8w)
+
+- Type: spec-interpretation and owner decision (2026-10-20: all eight content kinds, backend and CMS together)
+- Decision: `resource_working_copies` (changeset 0033, group 8) and `GET`, `PUT`, `DELETE
+  .../{kind}/{id}/working-copy` plus `POST .../working-copy:apply` for `places`, `pois`, `routes`, `guides`,
+  `events`, `categories`, `maps`, and `floor-plans` (`03` §1, `06` §17, `07` §14). Interpretations:
+  - the `PUT` body is `{baseVersion, workingCopyVersion, payload}`. On creation `baseVersion` must be the live
+    row's version; on replacement `workingCopyVersion` must be the copy's version, and a different
+    `baseVersion` moves the copy onto the live row only when it equals the live version (the CMS's "reopen
+    on the current version" after an apply conflict, `12` §4). Anything else is `409 VERSION_CONFLICT` with
+    `currentVersion` (the live version, or the copy's version when the copy moved);
+  - `payload` is the kind's update body without `version`, plus its children as whole ordered lists:
+    `stops`, `blocks`, `occurrences`, `placements`, `positions`, `categoryIds`, `media` (non-INLINE
+    bindings), each item carrying the existing row's `id` when it has one. Triggers stay rows of their own
+    (D-026) and are not in the payload;
+  - validation is a dry run: the kind's own write runs on the live rows in a transaction that is always
+    rolled back, so a payload is checked exactly like a save of a DRAFT and the response carries `resource`,
+    the kind's read DTO as it would read after apply. Errors carry payload paths (`stops[2].poiId`);
+  - apply locks the live row (`FOR UPDATE`), compares its version with `baseVersion`, runs the same write,
+    and deletes the copy in one transaction; each child collection is replaced by diffing on `id`
+    (missing deleted, unknown created, the rest updated, then ordered);
+  - `GET .../working-copy` returns the copy with `resource` rendered by the same dry run, or `resource` null
+    with `errors` when the payload no longer passes the rules, so the author can still discard it
+    (QUESTIONS.md Q-016);
+  - the last editor is `updatedBySubject` of the copy until Audit Events exist; no display name is stored
+    (AGENTS.md §4 rule 4);
+  - a direct `PUT` of an ACTIVE Resource and every child endpoint under an ACTIVE parent keep answering
+    `422 RESOURCE_NOT_EDITABLE`, naming the working copy, instead of writing into the copy as `07` §14 says
+    for child writes: the CMS sends the whole state in one `PUT`, and patching a JSON payload per child
+    endpoint is deferred (GAPS.md G-034);
+  - each kind's handler lives in its `api` package beside the response DTOs it renders; the kinds' update
+    use cases expose their write without the status check for it.
+  - Supersedes the first bullet of D-019 and the "only DRAFT until working copies exist" parts of D-021 to
+    D-025.
+- Why: Milestone 8 (`08`) and AGENTS.md §4 rule 13; owner priority over the rest of Milestone 8.
+- Alternatives: a patch per child endpoint into the payload (deferred); validation rules duplicated per kind
+  for the save (rejected: two rule sets drift); storing the editor's display name (rejected, rule 4).
+- Affected specs: `03` §1; `06` §17; `07` §14, §15; `08` Milestone 8; `11` §4; `12` §4, §5.
+
+## D-028 (2026-10-22) — Triggers open Places, Routes, Guides, and Events
+
+- Type: spec-interpretation (owner request 2026-10-22)
+- Decision: `InteractionTrigger.targetResourceType` admits `POI`, `PLACE`, `ROUTE`, `GUIDE`, and `EVENT`
+  (changeset 0034 widens the check of 0032; `TriggerTargetType`). Interpretations:
+  - the target is a Resource of that kind in the Project that is not archived, looked up by its kind
+    (`RESOURCE_NOT_FOUND`, `ARCHIVED_REFERENCE`, as for POIs in D-026);
+  - a non-archived trigger keeps its target in use for every kind (`03` §1); Guides gain a reference source
+    (`GuideReferenceSource`), so their deactivation and archival are now refused with `RESOURCE_IN_USE` while a
+    trigger opens them, like the other kinds;
+  - a Route Stop gets no trigger of its own: the triggers of its Point of Interest open it (`03` §14);
+  - Pages wait for Milestone 6; every other rule of D-026 (types, codes, surfaces, edited in place, live rows
+    outside the working copy of D-027) holds for every kind;
+  - the rollback of 0034 restores the POI-only check and fails while triggers of other kinds exist; they must
+    be archived and deleted first.
+- Why: `12` §3 puts the trigger card among the parts "common to every kind"; `03` §14 does not restrict the kind.
+- Alternatives: one trigger table per kind (rejected: one generic target, like ResourceAsset).
+- Affected specs: `03` §1, §14; `07` §14; `11` §9; `12` §3.
+
+## D-029 (2026-10-22) — Project surfaces, the public web address, and QR images
+
+- Type: spec-interpretation and owner decisions (2026-10-22: a minimal Surfaces settings; https, or http for
+  localhost)
+- Decision: `project_surfaces` (changeset 0035, group 2) and `GET`, `PUT /api/v1/projects/{p}/surfaces` (`03` §2,
+  `07` §14, `12` §4 Change surfaces); `qr.png` renders real images (`07` §14, `11` §9). Interpretations:
+  - the body is `{surfaces: [{surface, enabled, configuration}]}`; `GET` always lists WEB, MOBILE, and KIOSK in
+    that order, a surface without a row reading as disabled; `PUT` writes the listed surfaces and leaves the
+    others as they are;
+  - `configuration` keys are known per surface and unknown ones refused (`04` §6): WEB takes `publicBaseUrl`,
+    MOBILE and KIOSK nothing yet; the Template's `supportedSurfaces` are not checked, as no Template exists
+    (G-035);
+  - `publicBaseUrl` is an origin (`03` §2): `https`, or `http` for `localhost`, `127.0.0.1`, and `[::1]` (owner);
+    no path, query, fragment, or user; scheme and host lowercased, no trailing slash; blank removes it;
+  - an address counts only while WEB is enabled;
+  - a QR code encodes `{publicBaseUrl}/{defaultLanguage}/{pois|places|routes|guides|events}/{slug}?t={code}`; the
+    default language because `11` §9 redirects other codes to it and a printed code should open in the Project's
+    main language; the code is URL-encoded;
+  - the image is a 512-pixel black-on-white PNG, error correction M, quiet zone 2, encoded with ZXing core 3.5.3
+    (Apache-2.0) and written with `javax.imageio`; trigger responses carry `runtimeUrl`, the encoded address,
+    which the CMS shows (`12` §4 Generate a QR code);
+  - the enum `Surface` moved from `trigger.domain` to the new `surface.domain`.
+- Why: `qr.png` needed the address (G-033); the owner wants real QR images now, ahead of the rest of Milestone 2.
+- Alternatives: a backend property as a temporary address (rejected: one address for every Project); the CMS
+  drawing the real image (rejected: `07` §14 makes `qr.png` the source).
+- Affected specs: `03` §2, §14; `04` §6; `07` §14; `08` Milestones 2, 3; `11` §9; `12` §3, §4.
+
+## D-030 (2026-10-22) — List parameters of the content collections
+
+- Type: spec-interpretation (owner request 2026-10-22, next item of the to-do list)
+- Decision: the lists of Places, Points of Interest, Routes, Guides, Events, and Categories take, besides
+  `status`, `q`, `pending`, and paging (`07` §14, `06` §16):
+  - `language`: `q` matches the titles (Category names) of that language only; a code that is not an enabled
+    language of the Project is `422 UNKNOWN_LANGUAGE`; a POI's exact exhibit code and a Category's code still
+    match in every language, as they have none;
+  - `featured=true|false` on the five kinds that have the flag (not Categories);
+  - `categoryId` on POIs and Routes: the Resources in that Category or in one of its subcategories (the two-level
+    tree of D-024, as the CMS filter does), or `none` for those without a Category; an id of no Category of the
+    Project matches nothing; anything else is `422 INVALID_FORMAT`;
+  - `sort=<field>` or `<field>,asc|desc` over the indexed columns: `sortOrder` and `slug`, Categories `sortOrder`
+    and `code`; anything else is `422 INVALID_SORT`; the default stays `sortOrder asc` and `createdAt` breaks
+    ties;
+  - Category search on the code became case-insensitive, like the names.
+- Why: `07` §14 names `language` and `categoryId`, `06` §16 a `sort` over indexed columns; `featured` is the
+  flag every Resource list shows. The shared parts live in `ListParams`, `ListFilters`, and `CategoryFilter`.
+- Consequences: the CMS keeps filtering in the browser: it loads each whole list, which manual reordering needs
+  (frontend D-017).
+- Alternatives: sorting by `updatedAt` or a title (rejected: not indexed, `06` §16).
+- Affected specs: `06` §16; `07` §14; `12` §3 Content library.
+
+## D-031 (2026-10-23) — Per-language translation endpoints
+
+- Type: spec-interpretation (owner request 2026-10-23, next item of the to-do list)
+- Decision: `PUT` and `DELETE /api/v1/projects/{p}/{kind}/{id}/translations/{lang}` (`07` §14) for `places`,
+  `pois`, `routes`, `guides`, `events`, and `categories`; maps and floor plans have no texts (`404`). Interpretations:
+  - one generic implementation (`translation` package) over the working-copy handlers of D-027: the Resource's
+    current state is read as a payload from its read DTO (`WorkingCopyHandlers.liveState`, INLINE media left
+    out), the language is replaced, and the kind's own write validates and stores it, so every rule of a normal
+    save applies and children, Categories, and media are kept as they are;
+  - the `PUT` body is the kind's translation fields of that language plus `version` (the live row's version) and,
+    once a working copy exists, `workingCopyVersion`; the language must be an enabled one (`422
+    UNKNOWN_LANGUAGE` at `language`);
+  - a DRAFT Resource is written in place under its `version` (`409 VERSION_CONFLICT` otherwise); an ACTIVE one
+    through its working copy (`12` §3: "a translation saved on an ACTIVE Resource goes to its Working Copy"),
+    started from the live state when there is none, under the copy's version rules of D-027;
+  - the response is the Resource's read DTO either way (`07` §14); after a write into a copy the header
+    `X-Working-Copy-Version` carries the copy's version for the next call, and CORS exposes it;
+  - `DELETE` empties every text of that language, which then reads as missing; rows are kept, as saves never
+    delete languages; the Project's default language cannot be emptied (`422 DEFAULT_LANGUAGE`); `version` and
+    `workingCopyVersion` are query parameters;
+  - child texts (`.../stops/{stopId}/translations/{lang}`, `.../blocks/{blockId}/translations/{lang}`) and Asset
+    texts (`.../assets/{id}/translations/{lang}`) are separate later items.
+- Why: G-026; the Translation workspace of `12` §3 saves one language at a time.
+- Alternatives: one implementation per kind (rejected: six copies of the rules the handlers already hold).
+- Affected specs: `07` §14; `12` §3 Translation workspace, §7.
+

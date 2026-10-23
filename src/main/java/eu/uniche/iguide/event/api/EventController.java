@@ -14,13 +14,18 @@ import eu.uniche.iguide.platform.security.CurrentPrincipal;
 import eu.uniche.iguide.platform.web.PageResponse;
 import eu.uniche.iguide.resource.api.ChangeStatusRequest;
 import eu.uniche.iguide.resource.api.OrderRequest;
+import eu.uniche.iguide.resource.application.ListParams;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -49,10 +54,12 @@ public class EventController {
     private final ChangeEventStatusUseCase changeStatus;
     private final ReorderEventsUseCase reorderEvents;
     private final EventOccurrenceUseCase occurrences;
+    private final WorkingCopyStore workingCopies;
 
     public EventController(ListEventsQuery listEvents, GetEventQuery getEvent, CreateEventUseCase createEvent,
                            UpdateEventUseCase updateEvent, ChangeEventStatusUseCase changeStatus,
-                           ReorderEventsUseCase reorderEvents, EventOccurrenceUseCase occurrences) {
+                           ReorderEventsUseCase reorderEvents, EventOccurrenceUseCase occurrences,
+                           WorkingCopyStore workingCopies) {
         this.listEvents = listEvents;
         this.getEvent = getEvent;
         this.createEvent = createEvent;
@@ -60,16 +67,24 @@ public class EventController {
         this.changeStatus = changeStatus;
         this.reorderEvents = reorderEvents;
         this.occurrences = occurrences;
+        this.workingCopies = workingCopies;
     }
 
     @GetMapping("/events")
     public PageResponse<EventResponse> list(@PathVariable UUID projectId,
                                             @RequestParam(required = false) ResourceStatus status,
                                             @RequestParam(required = false) String q,
+                                            @RequestParam(required = false) String language,
+                                            @RequestParam(required = false) Boolean featured,
+                                            @RequestParam(required = false) String sort,
+                                            @RequestParam(required = false) Boolean pending,
                                             @RequestParam(required = false) Integer page,
                                             @RequestParam(required = false) Integer size) {
-        return PageResponse.of(listEvents.execute(projectId, CurrentPrincipal.require(), status, q, page, size),
-                EventResponse::from);
+        Page<EventView> result = listEvents.execute(projectId, CurrentPrincipal.require(), new ListParams(status, q,
+                language, featured, Boolean.TRUE.equals(pending), sort, page, size));
+        Map<UUID, Instant> copies = workingCopies.updatedAt(projectId, WorkingCopyResourceType.EVENT,
+                result.map(view -> view.event().getId()).getContent());
+        return PageResponse.of(result, view -> EventResponse.from(view, copies.get(view.event().getId())));
     }
 
     /** Occurrences of every Event of the Project overlapping {@code [from, to)}, at most 400 days. */
@@ -92,7 +107,8 @@ public class EventController {
 
     @GetMapping("/events/{eventId}")
     public EventResponse get(@PathVariable UUID projectId, @PathVariable UUID eventId) {
-        return EventResponse.from(getEvent.execute(projectId, eventId, CurrentPrincipal.require()));
+        return EventResponse.from(getEvent.execute(projectId, eventId, CurrentPrincipal.require()),
+                workingCopies.updatedAt(projectId, WorkingCopyResourceType.EVENT, eventId));
     }
 
     @PutMapping("/events/{eventId}")

@@ -14,12 +14,18 @@ import eu.uniche.iguide.platform.security.CurrentPrincipal;
 import eu.uniche.iguide.platform.web.PageResponse;
 import eu.uniche.iguide.resource.api.ChangeStatusRequest;
 import eu.uniche.iguide.resource.api.OrderRequest;
+import eu.uniche.iguide.resource.application.ListParams;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,10 +52,12 @@ public class GuideController {
     private final ChangeGuideStatusUseCase changeStatus;
     private final ReorderGuidesUseCase reorderGuides;
     private final GuideBlockUseCase blocks;
+    private final WorkingCopyStore workingCopies;
 
     public GuideController(ListGuidesQuery listGuides, GetGuideQuery getGuide, CreateGuideUseCase createGuide,
                            UpdateGuideUseCase updateGuide, ChangeGuideStatusUseCase changeStatus,
-                           ReorderGuidesUseCase reorderGuides, GuideBlockUseCase blocks) {
+                           ReorderGuidesUseCase reorderGuides, GuideBlockUseCase blocks,
+                           WorkingCopyStore workingCopies) {
         this.listGuides = listGuides;
         this.getGuide = getGuide;
         this.createGuide = createGuide;
@@ -57,16 +65,24 @@ public class GuideController {
         this.changeStatus = changeStatus;
         this.reorderGuides = reorderGuides;
         this.blocks = blocks;
+        this.workingCopies = workingCopies;
     }
 
     @GetMapping("/guides")
     public PageResponse<GuideResponse> list(@PathVariable UUID projectId,
                                             @RequestParam(required = false) ResourceStatus status,
                                             @RequestParam(required = false) String q,
+                                            @RequestParam(required = false) String language,
+                                            @RequestParam(required = false) Boolean featured,
+                                            @RequestParam(required = false) String sort,
+                                            @RequestParam(required = false) Boolean pending,
                                             @RequestParam(required = false) Integer page,
                                             @RequestParam(required = false) Integer size) {
-        return PageResponse.of(listGuides.execute(projectId, CurrentPrincipal.require(), status, q, page, size),
-                GuideResponse::from);
+        Page<GuideView> result = listGuides.execute(projectId, CurrentPrincipal.require(), new ListParams(status, q,
+                language, featured, Boolean.TRUE.equals(pending), sort, page, size));
+        Map<UUID, Instant> copies = workingCopies.updatedAt(projectId, WorkingCopyResourceType.GUIDE,
+                result.map(view -> view.guide().getId()).getContent());
+        return PageResponse.of(result, view -> GuideResponse.from(view, copies.get(view.guide().getId())));
     }
 
     @PostMapping("/guides")
@@ -79,7 +95,8 @@ public class GuideController {
 
     @GetMapping("/guides/{guideId}")
     public GuideResponse get(@PathVariable UUID projectId, @PathVariable UUID guideId) {
-        return GuideResponse.from(getGuide.execute(projectId, guideId, CurrentPrincipal.require()));
+        return GuideResponse.from(getGuide.execute(projectId, guideId, CurrentPrincipal.require()),
+                workingCopies.updatedAt(projectId, WorkingCopyResourceType.GUIDE, guideId));
     }
 
     @PutMapping("/guides/{guideId}")

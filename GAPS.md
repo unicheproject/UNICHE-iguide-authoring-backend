@@ -170,18 +170,47 @@ Keycloak and the Catalogue).
   - `durationSeconds` is never measured for audio and video; no virus scanning, transcoding, or resumable
     upload (`09` §2); objects of replaced files and of failed metadata writes are never cleaned up;
   - no theme references to Assets (Milestone 2), so an Asset used by a theme is not kept in use;
-  - an ACTIVE Resource cannot change its media until working copies exist (G-027).
+  - an ACTIVE Resource changes its media only through its working copy since 2026-10-21 (D-027).
 - Closed by: Milestones 2, 8, and 13, and a storage cleanup job.
 
 ### G-033 — Triggers: QR image, capabilities, list chips, other targets
 
 - Found (M5t, 2026-10-19):
   - `GET .../triggers/{id}/qr.png` always answers `422 NO_PUBLIC_BASE_URL`: the `WEB` surface's
-    `publicBaseUrl` does not exist (Milestone 2), and no QR image library is wired;
+    `publicBaseUrl` does not exist (Milestone 2), and no QR image library is wired. Closed 2026-10-22 (D-029):
+    surfaces exist and `qr.png` renders the runtime URL once WEB has an address (TRACEABILITY.md R15);
   - the `QR_TRIGGERS` and `LOCATION_TRIGGERS` capabilities are not checked (G-024);
-  - triggers target Points of Interest only; Places, Routes, Guides, Events, and Pages follow;
+  - triggers target Points of Interest only; Places, Routes, Guides, Events, and Pages follow. Since
+    2026-10-22 (D-028) Places, Routes, Guides, and Events are targets too (TRACEABILITY.md R14); Pages wait for
+    Milestone 6;
   - trigger changes append no Audit Event (G-023) and are not in a manifest (Milestone 8).
 - Closed by: Milestones 2, 7, 8, and the editors of the other kinds.
+
+### G-034 — Working copies: what Milestone 8 still owes them
+
+- Found (M8w, 2026-10-20):
+  - apply does not increment `contentRevision` (no ProjectSettings, G-024) and appends no
+    `RESOURCE_CHANGES_APPLIED`; discard appends no `RESOURCE_WORKING_COPY_DISCARDED` (Milestone 7, G-023);
+  - the CMS banner names the last editor by subject, not by the Audit Event's display name (`12` §4);
+  - a `409` carries `currentVersion` but no `conflictingFields` (`07` §15); the CMS compares the values
+    itself;
+  - child endpoints under an ACTIVE parent answer `422 RESOURCE_NOT_EDITABLE` instead of writing into the
+    copy (`07` §14, D-027);
+  - the preview does not render working copies (no runtime API, Milestone 8);
+  - Assets have no working copy (`hasWorkingCopy` stays false); they remain edited in place (D-025).
+- Closed by: Milestones 2, 7, and 8, and a child-endpoint slice.
+
+### G-035 — Surfaces: what Milestone 2 still owes them
+
+- Found (D-029, 2026-10-22):
+  - the Template's `supportedSurfaces` are not checked when a surface is enabled (`03` §2, `04` §11): no Template
+    exists before M2a;
+  - surface changes do not increment `contentRevision` (G-024) and append no Audit Event (G-023);
+  - readiness does not report `NO_SURFACE_ENABLED` or `PUBLIC_BASE_URL_MISSING` (`07` §14, Milestone 8);
+  - `configuration` takes only `publicBaseUrl`; the Template's `runtimeDefaults` and other keys (`04` §6) wait
+    for Templates; a surface's capability overrides are not modelled;
+  - Project initialization does not create the surfaces (`04` §8).
+- Closed by: Milestones 2 (M2a and initialization), 7, and 8.
 
 ## Closed
 
@@ -238,12 +267,20 @@ Keycloak and the Catalogue).
 
 - Found: no `translations/{lang}`, `resource-assets`, `categories`, child `:order` endpoints; no
   `pending`, `language`, or `sort` list parameters.
+- Since then: `resource-assets`, `categories`, and child `:order` (M3, M4); `pending` (D-027); `language`,
+  `featured`, `categoryId`, and `sort` (2026-10-22, D-030, TRACEABILITY.md R16); `translations/{lang}` of the
+  six content kinds (2026-10-23, D-031, R17). Still open: the translation paths of Route Stops, Guide Blocks, and
+  Assets.
 - Spec: `07` §14. Closed by: Milestones 3, 4, and 8 as their entities land.
 
 ### G-027 — No working copies
 
 - Found: `ACTIVE` Places, maps, and plans are not editable; `hasWorkingCopy` is always `false`.
 - Spec: `03` §1, `06` §17, `07` §14. Closed by: Milestone 8.
+- Closed 2026-10-21 (M8w, D-027): working copies for Places, POIs, Routes, Guides, Events, Categories, maps,
+  and floor plans; `hasWorkingCopy`, `workingCopyUpdatedAt`, and `pending=true` are real. Evidence:
+  TRACEABILITY.md R13, `WorkingCopyIntegrationTest` and the eight `*WorkingCopyIntegrationTest` classes. What
+  Milestone 8 still owes them is G-034.
 
 ### G-028 — Points of Interest do not exist
 
