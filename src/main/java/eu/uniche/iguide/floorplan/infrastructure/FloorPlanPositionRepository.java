@@ -1,6 +1,7 @@
 package eu.uniche.iguide.floorplan.infrastructure;
 
 import eu.uniche.iguide.floorplan.domain.FloorPlanPosition;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,6 +11,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface FloorPlanPositionRepository extends JpaRepository<FloorPlanPosition, UUID> {
 
     List<FloorPlanPosition> findByProjectIdAndFloorPlanIdOrderByIdAsc(UUID projectId, UUID floorPlanId);
+
+    List<FloorPlanPosition> findByProjectIdAndFloorPlanIdInOrderByIdAsc(UUID projectId, Collection<UUID> floorPlanIds);
 
     Optional<FloorPlanPosition> findByProjectIdAndFloorPlanIdAndId(UUID projectId, UUID floorPlanId, UUID id);
 

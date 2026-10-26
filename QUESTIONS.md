@@ -193,6 +193,16 @@ None open. Q-002 and Q-003 were resolved on 2026-10-02 and are kept here for ref
   rules of D-027.
 - Assumption taken: as proposed (D-027).
 
+### Q-017 — Readiness codes for Routes
+
+- Kind: spec-change-request
+- Source: `03` §1: "Route: at least one Route Stop whose Point of Interest is `ACTIVE`" (required) and "a Route
+  with fewer than two stops" (warning); `07` §14 closes the `blocking` and `warnings` code lists without a code for
+  either (GAPS.md G-030).
+- Proposed: add `ROUTE_WITHOUT_ACTIVE_STOP` to the `blocking` codes and `ROUTE_FEW_STOPS` to the `warnings` codes,
+  both at path `stops`.
+- Assumption taken: as proposed (D-033).
+
 ### Open decisions of `09` that shape the next milestones
 
 | `09` | Shapes or blocks |

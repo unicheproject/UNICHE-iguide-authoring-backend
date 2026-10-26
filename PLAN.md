@@ -14,6 +14,7 @@ Keycloak and Catalogue. Frontend counterpart: `../uniche_iguide_frontend/PLAN.md
 - Status: backend code and tests green (TRACEABILITY.md R13); the CMS edits ACTIVE Resources through the copy
   (frontend D-016, unproven against the live realm).
   Open: `contentRevision`, Audit Events, `conflictingFields`, child endpoints into the copy (G-034).
+- Readiness: `GET .../readiness` since 2026-10-23 (D-033, R19); codes waiting for other milestones in G-036.
 
 ### M5t — Interaction Triggers on Points of Interest
 

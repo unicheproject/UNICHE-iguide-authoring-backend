@@ -1,6 +1,7 @@
 package eu.uniche.iguide.map.infrastructure;
 
 import eu.uniche.iguide.map.domain.GeographicMapResource;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,6 +11,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface GeographicMapResourceRepository extends JpaRepository<GeographicMapResource, UUID> {
 
     List<GeographicMapResource> findByProjectIdAndMapIdOrderByIdAsc(UUID projectId, UUID mapId);
+
+    List<GeographicMapResource> findByProjectIdAndMapIdInOrderByIdAsc(UUID projectId, Collection<UUID> mapIds);
 
     Optional<GeographicMapResource> findByProjectIdAndMapIdAndId(UUID projectId, UUID mapId, UUID id);
 

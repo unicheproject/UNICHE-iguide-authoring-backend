@@ -18,6 +18,8 @@ public interface ResourceWorkingCopyRepository extends JpaRepository<ResourceWor
                                                                              WorkingCopyResourceType resourceType,
                                                                              UUID resourceId);
 
+    List<ResourceWorkingCopy> findByProjectId(UUID projectId);
+
     List<ResourceWorkingCopy> findByProjectIdAndResourceTypeAndResourceIdIn(UUID projectId,
                                                                            WorkingCopyResourceType resourceType,
                                                                            Collection<UUID> resourceIds);

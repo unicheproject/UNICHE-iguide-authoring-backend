@@ -1,6 +1,7 @@
 package eu.uniche.iguide.map.infrastructure;
 
 import eu.uniche.iguide.map.domain.GeographicMap;
+import eu.uniche.iguide.resource.domain.ResourceStatus;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,6 +15,8 @@ public interface GeographicMapRepository extends JpaRepository<GeographicMap, UU
         JpaSpecificationExecutor<GeographicMap> {
 
     Optional<GeographicMap> findByProjectIdAndId(UUID projectId, UUID id);
+
+    List<GeographicMap> findByProjectIdAndStatus(UUID projectId, ResourceStatus status);
 
     Optional<GeographicMap> findByProjectIdAndPlaceId(UUID projectId, UUID placeId);
 

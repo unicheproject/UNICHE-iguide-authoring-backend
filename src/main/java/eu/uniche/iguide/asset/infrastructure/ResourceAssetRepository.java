@@ -30,6 +30,8 @@ public interface ResourceAssetRepository extends JpaRepository<ResourceAsset, UU
 
     List<ResourceAsset> findByProjectIdAndAssetIdIn(UUID projectId, Collection<UUID> assetIds);
 
+    List<ResourceAsset> findByProjectId(UUID projectId);
+
     @Query("""
             select coalesce(max(b.sortOrder), -1) from ResourceAsset b
             where b.projectId = :projectId and b.resourceType = :resourceType and b.resourceId = :resourceId

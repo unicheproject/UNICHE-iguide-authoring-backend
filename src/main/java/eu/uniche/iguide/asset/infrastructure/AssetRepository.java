@@ -1,6 +1,7 @@
 package eu.uniche.iguide.asset.infrastructure;
 
 import eu.uniche.iguide.asset.domain.Asset;
+import eu.uniche.iguide.resource.domain.ResourceStatus;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -12,6 +13,8 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 public interface AssetRepository extends JpaRepository<Asset, UUID>, JpaSpecificationExecutor<Asset> {
 
     Optional<Asset> findByProjectIdAndId(UUID projectId, UUID id);
+
+    List<Asset> findByProjectIdAndStatus(UUID projectId, ResourceStatus status);
 
     List<Asset> findByProjectIdAndIdIn(UUID projectId, Collection<UUID> ids);
 }
