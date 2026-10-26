@@ -12,6 +12,7 @@ import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -42,6 +43,28 @@ public class UpdateAssetUseCase {
         this.assets = assets;
         this.translations = translations;
         this.transactionTemplate = transactionTemplate;
+    }
+
+    /**
+     * {@code PUT .../assets/{id}/translations/{lang}} ({@code 07} section 14, DECISIONS.md D-032): one language's texts,
+     * the name, the decorative flag, and the other languages kept. {@code null} texts empty the language, which the
+     * default language refuses.
+     */
+    public AssetView translate(UUID projectId, UUID assetId, UnichePrincipal principal, Long version, String language,
+                               AssetTranslationInput texts) {
+        accessGateway.requireAccess(projectId, principal);
+        if (language == null || !rules.enabledLanguages(projectId).contains(language)) {
+            throw new ValidationFailedException("The language is not one of this project.",
+                    List.of(new ErrorItem("language", "UNKNOWN_LANGUAGE", "Is not a language of this project.")));
+        }
+        if (texts == null && language.equals(rules.defaultLanguage(projectId))) {
+            throw new ValidationFailedException("The default language cannot be emptied.", List.of(new ErrorItem(
+                    "language", "DEFAULT_LANGUAGE", "Change the project's default language first.")));
+        }
+        Asset asset = transactionTemplate.execute(status -> rules.requireAsset(projectId, assetId));
+        Map<String, AssetTranslationInput> one = new HashMap<>();
+        one.put(language, texts);
+        return execute(projectId, assetId, principal, version, asset.getInternalName(), asset.isDecorative(), one);
     }
 
     public AssetView execute(UUID projectId, UUID assetId, UnichePrincipal principal, Long version, String rawName,

@@ -65,7 +65,7 @@ public class ResourceTranslationController {
         return type;
     }
 
-    private static ResponseEntity<Object> response(ResourceTranslationUseCase.Result result) {
+    static ResponseEntity<Object> response(ResourceTranslationUseCase.Result result) {
         ResponseEntity.BodyBuilder ok = ResponseEntity.ok();
         if (result.workingCopyVersion() != null) {
             ok.header(WORKING_COPY_VERSION, String.valueOf(result.workingCopyVersion()));
@@ -73,7 +73,7 @@ public class ResourceTranslationController {
         return ok.body(result.resource());
     }
 
-    private static Long number(Object value) {
+    static Long number(Object value) {
         return value instanceof Number n ? n.longValue() : null;
     }
 }

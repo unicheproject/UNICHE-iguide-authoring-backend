@@ -142,6 +142,101 @@ class ResourceTranslationIntegrationTest extends ContentIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    // --- Route Stops, Guide Blocks, and Assets (DECISIONS.md D-032) ---------------------------------
+
+    @Test
+    void aStopIsTranslatedInItsDraftRouteAndAnUnknownStopIsNotFound() throws Exception {
+        JsonNode poi = createPoi(PROJECT_A, "{\"title\": \"Κούρος\"}");
+        JsonNode route = read(mockMvc.perform(json(post("/api/v1/projects/{p}/routes", PROJECT_A),
+                Map.of("title", "Διαδρομή", "type", "OUTDOOR"))).andExpect(status().isCreated()).andReturn());
+        JsonNode stop = read(mockMvc.perform(json(post("/api/v1/projects/{p}/routes/{id}/stops", PROJECT_A,
+                        route.get("id").asText()), Map.of("poiId", poi.get("id").asText(),
+                        "translations", Map.of("el", Map.of("narrative", "Στάση")))))
+                .andExpect(status().isCreated()).andReturn());
+        JsonNode current = read(mockMvc.perform(authenticated(get("/api/v1/projects/{p}/routes/{id}", PROJECT_A,
+                route.get("id").asText()))).andReturn());
+        String stopUrl = "/api/v1/projects/" + PROJECT_A + "/routes/" + route.get("id").asText() + "/stops/";
+
+        JsonNode saved = read(mockMvc.perform(json(put(stopUrl + stop.get("id").asText() + "/translations/en"),
+                        Map.of("version", current.get("version").asLong(), "narrative", "A stop", "titleOverride", "Kouros")))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode texts = saved.get("stops").get(0).get("translations");
+        assertThat(saved.get("stops").get(0).get("id").asText()).isEqualTo(stop.get("id").asText());
+        assertThat(texts.get("en").get("narrative").asText()).isEqualTo("A stop");
+        assertThat(texts.get("el").get("narrative").asText()).isEqualTo("Στάση");
+        assertThat(saved.get("version").asLong()).isEqualTo(current.get("version").asLong() + 1);
+
+        mockMvc.perform(json(put(stopUrl + UUID.randomUUID() + "/translations/en"),
+                        Map.of("version", saved.get("version").asLong(), "narrative", "x")))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(authenticated(delete(stopUrl + stop.get("id").asText() + "/translations/el")
+                        .param("version", saved.get("version").asText())))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors[0].code").value("DEFAULT_LANGUAGE"));
+        JsonNode cleared = read(mockMvc.perform(authenticated(delete(stopUrl + stop.get("id").asText() + "/translations/en")
+                        .param("version", saved.get("version").asText())))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(cleared.get("stops").get(0).get("translations").get("en").get("narrative").isNull()).isTrue();
+    }
+
+    @Test
+    void aBlockOfAnActiveGuideIsTranslatedThroughItsWorkingCopy() throws Exception {
+        JsonNode guide = read(mockMvc.perform(json(post("/api/v1/projects/{p}/guides", PROJECT_A), Map.of("title", "Ιστορία")))
+                .andExpect(status().isCreated()).andReturn());
+        JsonNode block = read(mockMvc.perform(json(post("/api/v1/projects/{p}/guides/{id}/blocks", PROJECT_A,
+                        guide.get("id").asText()), Map.of("blockType", "TEXT", "translations", Map.of("el", Map.of("text",
+                        Map.of("blocks", List.of(Map.of("type", "paragraph", "text", "Κείμενο"))))))))
+                .andExpect(status().isCreated()).andReturn());
+        JsonNode current = read(mockMvc.perform(authenticated(get("/api/v1/projects/{p}/guides/{id}", PROJECT_A,
+                guide.get("id").asText()))).andReturn());
+        JsonNode active = changeStatus("/api/v1/projects/" + PROJECT_A + "/guides", guide.get("id").asText(), "ACTIVE",
+                current.get("version").asLong(), 200);
+
+        String blockUrl = "/api/v1/projects/" + PROJECT_A + "/guides/" + guide.get("id").asText() + "/blocks/"
+                + block.get("id").asText() + "/translations/en";
+        mockMvc.perform(json(put(blockUrl), Map.of("version", active.get("version").asLong(),
+                        "text", Map.of("blocks", List.of(Map.of("type", "paragraph", "text", "Text"))))))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("X-Working-Copy-Version"))
+                .andExpect(jsonPath("$.hasWorkingCopy").value(true));
+        mockMvc.perform(authenticated(get("/api/v1/projects/{p}/guides/{id}", PROJECT_A, guide.get("id").asText())))
+                .andExpect(jsonPath("$.blocks[0].translations.en").doesNotExist());
+
+        JsonNode applied = applyWorkingCopy(PROJECT_A, "guides", guide.get("id").asText(), 200);
+        assertThat(applied.get("blocks").get(0).get("translations").get("en").get("text").get("blocks").get(0)
+                .get("text").asText()).isEqualTo("Text");
+    }
+
+    @Test
+    void anAssetIsTranslatedOneLanguageAtATime() throws Exception {
+        JsonNode asset = uploadAsset(PROJECT_A, "kouros.png", "image/png", png(10, 10));
+        String url = "/api/v1/projects/" + PROJECT_A + "/assets/" + asset.get("id").asText() + "/translations/";
+        JsonNode greek = read(mockMvc.perform(json(put(url + "el"), Map.of("version", asset.get("version").asLong(),
+                        "title", "Κούρος", "alternativeText", "Μαρμάρινο άγαλμα")))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode english = read(mockMvc.perform(json(put(url + "en"), Map.of("version", greek.get("version").asLong(),
+                        "title", "Kouros", "alternativeText", "Marble statue")))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(english.get("translations").get("en").get("alternativeText").asText()).isEqualTo("Marble statue");
+        assertThat(english.get("translations").get("el").get("title").asText()).isEqualTo("Κούρος");
+        assertThat(english.get("internalName").asText()).isEqualTo(asset.get("internalName").asText());
+
+        mockMvc.perform(json(put(url + "en"), Map.of("version", greek.get("version").asLong(), "title", "Stale")))
+                .andExpect(status().isConflict());
+        mockMvc.perform(json(put(url + "fr"), Map.of("version", english.get("version").asLong(), "title", "x")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors[0].code").value("UNKNOWN_LANGUAGE"));
+        mockMvc.perform(authenticated(delete(url + "el").param("version", english.get("version").asText())))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors[0].code").value("DEFAULT_LANGUAGE"));
+        JsonNode cleared = read(mockMvc.perform(authenticated(delete(url + "en").param("version",
+                        english.get("version").asText())))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(cleared.get("translations").path("en").path("title").isMissingNode()
+                || cleared.get("translations").get("en").get("title").isNull()).isTrue();
+        assertThat(cleared.get("translations").get("el").get("title").asText()).isEqualTo("Κούρος");
+    }
+
     private JsonNode translate(UUID projectId, String kind, JsonNode resource, String language,
                                Map<String, Object> body, int expected) throws Exception {
         return read(mockMvc.perform(json(put(url(projectId, kind, resource, language)), new HashMap<>(body)))

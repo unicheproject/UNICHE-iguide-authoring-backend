@@ -26,6 +26,15 @@ public final class AssetRequests {
         }
     }
 
+    /** {@code PUT .../translations/{lang}}: one language's texts and the version last read. */
+    public record Translate(@NotNull Long version, String title, String caption, String alternativeText,
+                            String credits, String transcript) {
+
+        AssetTranslationInput toInput() {
+            return new AssetTranslationInput(title, caption, alternativeText, credits, transcript);
+        }
+    }
+
     public record TranslationBody(String title, String caption, String alternativeText, String credits,
                                   String transcript) {
 

@@ -22,6 +22,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -89,6 +90,21 @@ public class AssetController {
                                 @Valid @RequestBody AssetRequests.Update request) {
         return AssetResponse.from(updateAsset.execute(projectId, assetId, CurrentPrincipal.require(),
                 request.version(), request.internalName(), request.decorative(), request.translationInputs()));
+    }
+
+    /** One language's texts ({@code 07} section 14, DECISIONS.md D-032); the body adds {@code version}. */
+    @PutMapping("/{assetId}/translations/{language}")
+    public AssetResponse translate(@PathVariable UUID projectId, @PathVariable UUID assetId,
+                                   @PathVariable String language, @Valid @RequestBody AssetRequests.Translate request) {
+        return AssetResponse.from(updateAsset.translate(projectId, assetId, CurrentPrincipal.require(), request.version(),
+                language, request.toInput()));
+    }
+
+    @DeleteMapping("/{assetId}/translations/{language}")
+    public AssetResponse clearTranslation(@PathVariable UUID projectId, @PathVariable UUID assetId,
+                                          @PathVariable String language, @RequestParam(required = false) Long version) {
+        return AssetResponse.from(updateAsset.translate(projectId, assetId, CurrentPrincipal.require(), version,
+                language, null));
     }
 
     @PostMapping("/{assetId}/status")
