@@ -212,6 +212,15 @@ Keycloak and the Catalogue).
   - Project initialization does not create the surfaces (`04` §8).
 - Closed by: Milestones 2 (M2a and initialization), 7, and 8.
 
+### G-036 — Readiness codes not produced yet
+
+- Found (D-033, 2026-10-23): `TEMPLATE_VALIDATION_FAILED` and `THEME_CONTRAST_FAILED` (no Templates or themes,
+  Milestone 2), `MISSING_CAPTION_TRACK` (no caption metadata on videos), `MAP_WITHOUT_POI_LIST`,
+  `CAPABILITY_DISABLED`, and `UNREACHABLE_PAGE` (no Pages or Navigation, Milestone 6), `AI_OUTPUT_UNREVIEWED` (no AI
+  provenance, Milestone 13); the "missing summary" warning of `03` §1 has no code in `07` §14 and is not reported.
+- Spec: `07` §14, `14` §2.
+- Closed by: Milestones 2, 6, and 13, caption metadata, and a decided code for a missing summary.
+
 ## Closed
 
 ### G-007 — `/me/authorization` is cached and reshaped
@@ -269,8 +278,8 @@ Keycloak and the Catalogue).
   `pending`, `language`, or `sort` list parameters.
 - Since then: `resource-assets`, `categories`, and child `:order` (M3, M4); `pending` (D-027); `language`,
   `featured`, `categoryId`, and `sort` (2026-10-22, D-030, TRACEABILITY.md R16); `translations/{lang}` of the
-  six content kinds (2026-10-23, D-031, R17). Still open: the translation paths of Route Stops, Guide Blocks, and
-  Assets.
+  six content kinds (2026-10-23, D-031, R17); those of Route Stops, Guide Blocks, and Assets (2026-10-23, D-032,
+  R18). Every path of `07` §14 for the existing kinds now exists; Navigation items follow with Milestone 6.
 - Spec: `07` §14. Closed by: Milestones 3, 4, and 8 as their entities land.
 
 ### G-027 — No working copies
@@ -305,6 +314,9 @@ Keycloak and the Catalogue).
   endpoint does not exist yet.
 - Consequence: the readiness response (Milestone 8) cannot report these without a spec code.
 - Closed by: a QUESTIONS.md spec-change-request with the readiness milestone.
+- Closed 2026-10-23 (D-033): readiness reports `ROUTE_WITHOUT_ACTIVE_STOP` (blocking) and `ROUTE_FEW_STOPS`
+  (warning), proposed in QUESTIONS.md Q-017. Evidence: TRACEABILITY.md R19,
+  `ReadinessIntegrationTest.aRouteBlocksWithoutAnActiveStopAndDanglingStops`.
 
 ### G-031 — Rich text cannot embed images
 
