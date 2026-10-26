@@ -100,7 +100,7 @@ class WorkingCopyIntegrationTest extends ContentIntegrationTest {
         long moved = live + 1;
 
         JsonNode conflict = applyWorkingCopy(PROJECT_A, "places", id(place), 409);
-        assertThat(conflict.get("type").asText()).isEqualTo("VERSION_CONFLICT");
+        assertThat(conflict.get("code").asText()).isEqualTo("VERSION_CONFLICT");
         assertThat(conflict.get("currentVersion").asLong()).isEqualTo(moved);
 
         // Moving the copy onto another version than the live one is refused; onto the live one it is the
@@ -148,7 +148,7 @@ class WorkingCopyIntegrationTest extends ContentIntegrationTest {
                         {"baseVersion": %d, "payload": {"slug": "%s", "type": "SITE"}}"""
                         .formatted(live, other.get("slug").asText())))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.type").value("DUPLICATE_VALUE"));
+                .andExpect(jsonPath("$.code").value("DUPLICATE_VALUE"));
         mockMvc.perform(json(put(workingCopyUrl(PROJECT_A, "places", id(place))), """
                         {"baseVersion": %d, "payload": {"type": "NOT_A_TYPE"}}""".formatted(live)))
                 .andExpect(status().isUnprocessableEntity())

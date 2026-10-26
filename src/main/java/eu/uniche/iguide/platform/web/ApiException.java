@@ -26,7 +26,7 @@ public abstract class ApiException extends RuntimeException {
 
     public abstract HttpStatus status();
 
-    /** Stable machine-readable classification placed in {@link ErrorEnvelope#type()}. */
+    /** Stable machine-readable classification placed in {@link ErrorEnvelope#code()} and its URN {@code type}. */
     public abstract String type();
 
     public List<ErrorItem> errors() {

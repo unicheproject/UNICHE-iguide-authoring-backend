@@ -71,7 +71,7 @@ class GeographicMapIntegrationTest extends ContentIntegrationTest {
 
         JsonNode inUse = changeStatus(placeUrl(PROJECT_A), place.get("id").asText(), "ARCHIVED",
                 place.get("version").asLong(), 409);
-        assertThat(inUse.get("type").asText()).isEqualTo("RESOURCE_IN_USE");
+        assertThat(inUse.get("code").asText()).isEqualTo("RESOURCE_IN_USE");
         assertThat(inUse.get("references").get(0).get("resourceType").asText()).isEqualTo("MAP");
         assertThat(inUse.get("references").get(0).get("resourceId").asText()).isEqualTo(map.get("id").asText());
 
@@ -102,7 +102,7 @@ class GeographicMapIntegrationTest extends ContentIntegrationTest {
                         Map.of("resourceType", "PLACE", "resourceId", place.get("id").asText(),
                                 "latitude", 37.9, "longitude", 23.7)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.type").value("DUPLICATE_VALUE"));
+                .andExpect(jsonPath("$.code").value("DUPLICATE_VALUE"));
 
         mockMvc.perform(json(put(mapsUrl(PROJECT_A) + "/{id}/resources/{r}", map.get("id").asText(),
                         placement.get("id").asText()), Map.of("latitude", 37.97, "longitude", 23.72)))

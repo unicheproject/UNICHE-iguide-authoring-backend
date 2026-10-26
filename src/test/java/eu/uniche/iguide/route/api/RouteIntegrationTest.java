@@ -43,7 +43,7 @@ class RouteIntegrationTest extends ContentIntegrationTest {
         mockMvc.perform(json(post(routesUrl(PROJECT_A)),
                         "{\"title\": \"Again\", \"type\": \"INDOOR\", \"slug\": \"highlights-in-45-minutes\"}"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.type").value("DUPLICATE_VALUE"));
+                .andExpect(jsonPath("$.code").value("DUPLICATE_VALUE"));
     }
 
     @Test
@@ -62,7 +62,7 @@ class RouteIntegrationTest extends ContentIntegrationTest {
         assertThat(invalid.get("errors")).extracting(e -> e.get("path").asText())
                 .contains("estimatedDurationMinutes", "distanceMeters");
         JsonNode conflict = update(route, Map.of(), 409);
-        assertThat(conflict.get("type").asText()).isEqualTo("VERSION_CONFLICT");
+        assertThat(conflict.get("code").asText()).isEqualTo("VERSION_CONFLICT");
     }
 
     // --- Stops -----------------------------------------------------------------------------------

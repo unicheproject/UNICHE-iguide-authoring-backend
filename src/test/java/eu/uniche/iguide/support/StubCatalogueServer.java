@@ -38,7 +38,7 @@ public final class StubCatalogueServer implements AutoCloseable {
 
     /** What the stub actually received, so header propagation can be asserted. */
     public record ReceivedRequest(String method, String path, String authorization, String requestId,
-                                  String ifNoneMatch) {
+                                  String correlationId, String ifNoneMatch) {
     }
 
     private final HttpServer server;
@@ -81,7 +81,8 @@ public final class StubCatalogueServer implements AutoCloseable {
                     exchange.getRequestMethod(),
                     exchange.getRequestURI().getPath(),
                     exchange.getRequestHeaders().getFirst("Authorization"),
-                    exchange.getRequestHeaders().getFirst("X-Request-Id"),
+                    exchange.getRequestHeaders().getFirst("X-UNICHE-Request-Id"),
+                    exchange.getRequestHeaders().getFirst("X-Correlation-Id"),
                     exchange.getRequestHeaders().getFirst("If-None-Match")));
         }
         Response response = nextResponse.get();

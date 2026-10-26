@@ -50,6 +50,28 @@ class CorrelationIdFilterTest {
     }
 
     @Test
+    void acceptsTheLegacyHeaderAsAnAliasAndAnswersUnderThePlatformHeader() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(CorrelationIdFilter.LEGACY_HEADER, "legacy-7");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getHeader("X-UNICHE-Request-Id")).isEqualTo("legacy-7");
+        assertThat(response.getHeader(CorrelationIdFilter.LEGACY_HEADER)).isNull();
+    }
+
+    @Test
+    void thePlatformHeaderWinsOverTheAlias() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(CorrelationIdFilter.HEADER, "platform-1");
+        request.addHeader(CorrelationIdFilter.LEGACY_HEADER, "legacy-1");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getHeader(CorrelationIdFilter.HEADER)).isEqualTo("platform-1");
+    }
+
+    @Test
     void exposesTheIdToTheChainAndClearsItAfterwards() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(CorrelationIdFilter.HEADER, "in-flight");

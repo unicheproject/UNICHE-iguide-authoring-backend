@@ -64,7 +64,7 @@ class PlaceIntegrationTest extends ContentIntegrationTest {
         createPlace(PROJECT_A, "{\"title\": \"Delos\", \"type\": \"SITE\", \"slug\": \"delos\"}");
         mockMvc.perform(json(post(placeUrl(PROJECT_A)), "{\"title\": \"Delos\", \"type\": \"SITE\", \"slug\": \"delos\"}"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.type").value("DUPLICATE_VALUE"))
+                .andExpect(jsonPath("$.code").value("DUPLICATE_VALUE"))
                 .andExpect(jsonPath("$.errors[0].path").value("slug"));
         createPlace(PROJECT_B, "{\"title\": \"Delos\", \"type\": \"SITE\", \"slug\": \"delos\"}");
     }
@@ -97,7 +97,7 @@ class PlaceIntegrationTest extends ContentIntegrationTest {
         mockMvc.perform(json(put(placeUrl(PROJECT_A) + "/{id}", place.get("id").asText()),
                         body(place, Map.of())))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.type").value("VERSION_CONFLICT"))
+                .andExpect(jsonPath("$.code").value("VERSION_CONFLICT"))
                 .andExpect(jsonPath("$.currentVersion").value(place.get("version").asLong() + 1));
     }
 
@@ -234,7 +234,7 @@ class PlaceIntegrationTest extends ContentIntegrationTest {
         JsonNode foreign = createPlace(PROJECT_B, "Elsewhere", "SITE");
         mockMvc.perform(authenticated(get(placeUrl(PROJECT_A) + "/{id}", foreign.get("id").asText())))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.type").value("RESOURCE_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
         mockMvc.perform(json(post(placeUrl(PROJECT_A)), "{\"title\": \"Room\", \"type\": \"ROOM\", \"parentPlaceId\": \""
                         + foreign.get("id").asText() + "\"}"))
                 .andExpect(status().isUnprocessableEntity())

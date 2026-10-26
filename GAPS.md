@@ -14,6 +14,8 @@ Keycloak and the Catalogue).
   `application/json`; `type` is a bare code (`RESOURCE_NOT_FOUND`), there is no `code` member, no URN.
 - Spec: `07` §15, specs `CLAUDE.md` inv. 16 [ARC_7.9].
 - Consequence: the CMS cannot rely on the platform error model; clients would match on `type`.
+- Closed 2026-10-26 (D-034): every error is `application/problem+json` with the URN `type`, `code`, `title`,
+  `detail`, `requestId`, and structured `errors`. Evidence: TRACEABILITY.md R20, `ProblemDetailsIntegrationTest`.
 - Closed by: M0a problem-details tests (every error `application/problem+json`, `code`, `requestId`,
   header equals body).
 
@@ -25,6 +27,10 @@ Keycloak and the Catalogue).
 - Spec: `10` §8, `07` §5, specs `CLAUDE.md` inv. 16 [ARC_7.9].
 - Consequence: platform correlation fails; Catalogue log lines cannot be joined to ours.
 - Closed by: M0a correlation tests, response and outbound side (DECISIONS.md D-012).
+- Closed 2026-10-26 (D-034): `X-UNICHE-Request-Id` on every response, `X-Request-Id` accepted inbound as an
+  alias, Catalogue calls with `X-UNICHE-Request-Id` and `X-Correlation-Id`. Evidence: TRACEABILITY.md R20,
+  `CorrelationIdFilterTest`, `RestClientCatalogueClientTest.forwardsTheUsersBearerTokenAndTheCorrelationHeader`,
+  `ProblemDetailsIntegrationTest`.
 
 ### G-003 — One CORS configuration for every path
 
@@ -216,10 +222,25 @@ Keycloak and the Catalogue).
 
 - Found (D-033, 2026-10-23): `TEMPLATE_VALIDATION_FAILED` and `THEME_CONTRAST_FAILED` (no Templates or themes,
   Milestone 2), `MISSING_CAPTION_TRACK` (no caption metadata on videos), `MAP_WITHOUT_POI_LIST`,
-  `CAPABILITY_DISABLED`, and `UNREACHABLE_PAGE` (no Pages or Navigation, Milestone 6), `AI_OUTPUT_UNREVIEWED` (no AI
-  provenance, Milestone 13); the "missing summary" warning of `03` §1 has no code in `07` §14 and is not reported.
+  `CAPABILITY_DISABLED`, and `UNREACHABLE_PAGE` (no Pages or Navigation, Milestone 6); the "missing summary"
+  warning of `03` §1 has no code in `07` §14 and is not reported. `AI_OUTPUT_UNREVIEWED` is reported since D-035
+  for the Resources' own texts (children and Assets: G-037).
 - Spec: `07` §14, `14` §2.
-- Closed by: Milestones 2, 6, and 13, caption metadata, and a decided code for a missing summary.
+- Closed by: Milestones 2 and 6, caption metadata, and a decided code for a missing summary.
+
+### G-037 — MuseMind translation: what Milestone 13 still owes
+
+- Found (D-035, 2026-10-26):
+  - no real gateway adapter: only `disabled` and the labelled `mock`; the gateway REST API, its authentication
+    (user token or client credentials), timeouts, and the Java SDK or adapter decision are open (`09` §16, Q-018);
+  - since D-036 Route Stops, Guide Blocks, and Assets are covered; a stop or block that applying a working copy
+    recreates (its Point of Interest changed, or it was removed and added again) loses what the copy carried for it;
+  - "mark reviewed" appends no `CONTENT_REVIEWED` Audit Event (Milestone 7, G-023);
+  - citations are stored as the gateway returns them; how they are shown, and whether any reach visitors, is open
+    (`09` §16); provenance reaches no manifest (no runtime build yet, as `03` §1 requires);
+  - editor saves of the whole Resource never count as review, even when they change a machine-translated text.
+- Spec: `03` §1; `07` §14; `09` §16; `12` §3; `08` Milestone 13.
+- Closed by: the gateway API and Milestones 7 and 13.
 
 ## Closed
 

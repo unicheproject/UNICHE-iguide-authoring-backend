@@ -46,7 +46,7 @@ class EventIntegrationTest extends ContentIntegrationTest {
 
         assertThat(update(saved, Map.of("bookingUrl", "ftp://example.org"), 422).get("errors").get(0).get("path").asText())
                 .isEqualTo("bookingUrl");
-        assertThat(update(event, Map.of(), 409).get("type").asText()).isEqualTo("VERSION_CONFLICT");
+        assertThat(update(event, Map.of(), 409).get("code").asText()).isEqualTo("VERSION_CONFLICT");
     }
 
     @Test

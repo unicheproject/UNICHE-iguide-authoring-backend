@@ -48,7 +48,7 @@ class GuideIntegrationTest extends ContentIntegrationTest {
 
         assertThat(update(saved, Map.of("estimatedReadingMinutes", 601), 422).get("errors").get(0).get("path").asText())
                 .isEqualTo("estimatedReadingMinutes");
-        assertThat(update(guide, Map.of(), 409).get("type").asText()).isEqualTo("VERSION_CONFLICT");
+        assertThat(update(guide, Map.of(), 409).get("code").asText()).isEqualTo("VERSION_CONFLICT");
     }
 
     // --- Blocks ----------------------------------------------------------------------------------

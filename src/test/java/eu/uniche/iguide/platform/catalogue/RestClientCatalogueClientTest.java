@@ -62,6 +62,8 @@ class RestClientCatalogueClientTest {
         var request = catalogue.lastRequest();
         assertThat(request.authorization()).isEqualTo("Bearer the-users-token");
         assertThat(request.requestId()).isEqualTo("req-42");
+        // DECISIONS.md D-012: the Catalogue correlates only on X-Correlation-Id today.
+        assertThat(request.correlationId()).isEqualTo("req-42");
     }
 
     @Test

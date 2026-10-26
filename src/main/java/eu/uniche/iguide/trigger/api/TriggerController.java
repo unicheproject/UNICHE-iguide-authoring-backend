@@ -82,7 +82,8 @@ public class TriggerController {
                 request.targetStatus(), request.version()));
     }
 
-    @GetMapping(path = "/{triggerId}/qr.png", produces = {MediaType.IMAGE_PNG_VALUE, MediaType.APPLICATION_JSON_VALUE})
+    @GetMapping(path = "/{triggerId}/qr.png", produces = {MediaType.IMAGE_PNG_VALUE, MediaType.APPLICATION_JSON_VALUE,
+            MediaType.APPLICATION_PROBLEM_JSON_VALUE})
     public ResponseEntity<byte[]> qrImage(@PathVariable UUID projectId, @PathVariable UUID triggerId) {
         byte[] image = query.qrImage(projectId, triggerId, CurrentPrincipal.require());
         return ResponseEntity.ok().contentType(MediaType.IMAGE_PNG)

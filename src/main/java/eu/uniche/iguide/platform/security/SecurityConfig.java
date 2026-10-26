@@ -101,10 +101,11 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(corsProperties.allowedOrigins());
         configuration.setAllowedMethods(
                 List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Request-Id",
-                "If-None-Match"));
+        // X-Request-Id: accepted inbound as an alias of X-UNICHE-Request-Id (DECISIONS.md D-034).
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-UNICHE-Request-Id",
+                "X-Request-Id", "If-None-Match"));
         // X-Working-Copy-Version: the copy's version after a translation saved into it (DECISIONS.md D-031).
-        configuration.setExposedHeaders(List.of("X-Request-Id", "ETag", "Location", "X-Working-Copy-Version"));
+        configuration.setExposedHeaders(List.of("X-UNICHE-Request-Id", "ETag", "Location", "X-Working-Copy-Version"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

@@ -47,7 +47,7 @@ class PoiIntegrationTest extends ContentIntegrationTest {
         createPoi(PROJECT_A, "{\"title\": \"Kouros\", \"code\": \"12\", \"slug\": \"kouros\"}");
         mockMvc.perform(json(post(poiUrl(PROJECT_A)), "{\"title\": \"Kore\", \"code\": \"12\"}"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.type").value("DUPLICATE_VALUE"))
+                .andExpect(jsonPath("$.code").value("DUPLICATE_VALUE"))
                 .andExpect(jsonPath("$.errors[0].path").value("code"));
         mockMvc.perform(json(post(poiUrl(PROJECT_A)), "{\"title\": \"Kore\", \"slug\": \"kouros\"}"))
                 .andExpect(status().isConflict())
@@ -87,7 +87,7 @@ class PoiIntegrationTest extends ContentIntegrationTest {
         update(poi, Map.of("estimatedVisitMinutes", 0), 422);
         update(poi, Map.of(), 200);
         JsonNode conflict = update(poi, Map.of(), 409);
-        assertThat(conflict.get("type").asText()).isEqualTo("VERSION_CONFLICT");
+        assertThat(conflict.get("code").asText()).isEqualTo("VERSION_CONFLICT");
         assertThat(conflict.get("currentVersion").asLong()).isEqualTo(poi.get("version").asLong() + 1);
     }
 
@@ -130,7 +130,7 @@ class PoiIntegrationTest extends ContentIntegrationTest {
                 .andExpect(status().isCreated());
 
         JsonNode inUse = changeStatus(poiUrl(PROJECT_A), poi.get("id").asText(), "ARCHIVED", poi.get("version").asLong(), 409);
-        assertThat(inUse.get("type").asText()).isEqualTo("RESOURCE_IN_USE");
+        assertThat(inUse.get("code").asText()).isEqualTo("RESOURCE_IN_USE");
         assertThat(inUse.get("references")).extracting(r -> r.get("resourceType").asText())
                 .containsExactlyInAnyOrder("MAP", "FLOOR_PLAN");
         mockMvc.perform(authenticated(get(poiUrl(PROJECT_A) + "/{id}/references", poi.get("id").asText())))

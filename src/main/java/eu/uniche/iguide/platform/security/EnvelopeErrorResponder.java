@@ -10,8 +10,8 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 
 /**
- * Writes the standard error envelope for the two rejections Spring Security issues itself, inside the
- * filter chain and therefore out of reach of the controller exception handler.
+ * Writes the standard problem details body ({@code 07} section 15) for the two rejections Spring Security issues
+ * itself, inside the filter chain and therefore out of reach of the controller exception handler.
  *
  * <p>Without this, a caller would meet two different error shapes depending on how far into the
  * request its failure occurred. The {@code WWW-Authenticate} header the resource server sets is
@@ -39,14 +39,13 @@ public final class EnvelopeErrorResponder {
     private static void write(ObjectMapper objectMapper,
                               HttpServletResponse response,
                               HttpStatus status,
-                              String type,
-                              String title) throws IOException {
+                              String code,
+                              String detail) throws IOException {
         if (response.isCommitted()) {
             return;
         }
         response.setStatus(status.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        objectMapper.writeValue(response.getOutputStream(),
-                ErrorEnvelope.of(type, title, status.value()));
+        response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
+        objectMapper.writeValue(response.getOutputStream(), ErrorEnvelope.of(code, detail, status.value()));
     }
 }

@@ -41,7 +41,7 @@ class ResourceAssetIntegrationTest extends ContentIntegrationTest {
 
         assertThat(bind(url, audio, "HERO_IMAGE", null, 422).get("errors").get(0).get("code").asText())
                 .isEqualTo("WRONG_ASSET_TYPE");
-        assertThat(bind(url, image, "HERO_IMAGE", null, 409).get("type").asText()).isEqualTo("DUPLICATE_VALUE");
+        assertThat(bind(url, image, "HERO_IMAGE", null, 409).get("code").asText()).isEqualTo("DUPLICATE_VALUE");
         assertThat(bind(url, audio, "AUDIO_NARRATION", "fr", 422).get("errors").get(0).get("code").asText())
                 .isEqualTo("UNKNOWN_LANGUAGE");
         assertThat(bind(url, image, "INLINE", null, 422).get("errors").get(0).get("code").asText())

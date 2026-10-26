@@ -37,7 +37,7 @@ class ProjectLanguagesIntegrationTest extends ContentIntegrationTest {
                           {"languageCode": "Greek!", "displayName": "", "direction": null, "isDefault": false}
                         ]}"""))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.type").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.errors[?(@.code == 'ONE_DEFAULT_REQUIRED')]").exists())
                 .andExpect(jsonPath("$.errors[?(@.path == 'languages[1].languageCode')].code").value("DUPLICATE_VALUE"))
                 .andExpect(jsonPath("$.errors[?(@.path == 'languages[2].languageCode')].code").value("INVALID_FORMAT"))

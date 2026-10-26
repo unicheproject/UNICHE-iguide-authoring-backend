@@ -85,8 +85,8 @@ class AssetIntegrationTest extends ContentIntegrationTest {
         mockMvc.perform(authenticated(multipart(assetUrl(PROJECT_A), PROJECT_A)
                         .file(new MockMultipartFile("file", "long.pdf", "application/pdf", new byte[4096]))))
                 .andExpect(status().isPayloadTooLarge())
-                .andExpect(jsonPath("$.type").value("ASSET_TOO_LARGE"))
-                .andExpect(jsonPath("$.title").value("The file is larger than the 2048 bytes limit for document files."));
+                .andExpect(jsonPath("$.code").value("ASSET_TOO_LARGE"))
+                .andExpect(jsonPath("$.detail").value("The file is larger than the 2048 bytes limit for document files."));
     }
 
     @Test
@@ -127,7 +127,7 @@ class AssetIntegrationTest extends ContentIntegrationTest {
         changeStatus(assetUrl(PROJECT_A), decorative.get("id").asText(), "ACTIVE", flagged.get("version").asLong(), 200);
 
         assertThat(update(asset, Map.of("internalName", "Kouros", "translations", Map.of("fr", Map.of("title", "x"))), 409)
-                .get("type").asText()).isEqualTo("VERSION_CONFLICT");
+                .get("code").asText()).isEqualTo("VERSION_CONFLICT");
         assertThat(update(active, Map.of("internalName", "Kouros", "translations", Map.of("fr", Map.of("title", "x"))), 422)
                 .get("errors").get(0).get("code").asText()).isEqualTo("UNKNOWN_LANGUAGE");
     }
@@ -181,7 +181,7 @@ class AssetIntegrationTest extends ContentIntegrationTest {
 
         JsonNode inUse = changeStatus(assetUrl(PROJECT_A), image.get("id").asText(), "ARCHIVED",
                 image.get("version").asLong(), 409);
-        assertThat(inUse.get("type").asText()).isEqualTo("RESOURCE_IN_USE");
+        assertThat(inUse.get("code").asText()).isEqualTo("RESOURCE_IN_USE");
         assertThat(inUse.get("references").get(0).get("title").asText()).isEqualTo("Ground");
     }
 

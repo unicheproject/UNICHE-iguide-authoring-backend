@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -67,8 +68,10 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
                         .header("X-Request-Id", "unauth-1"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, "Bearer"))
-                .andExpect(header().string("X-Request-Id", "unauth-1"))
-                .andExpect(jsonPath("$.type").value("UNAUTHENTICATED"))
+                .andExpect(header().string("X-UNICHE-Request-Id", "unauth-1"))
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.type").value("urn:uniche:iguide:problem:UNAUTHENTICATED"))
+                .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"))
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.requestId").value("unauth-1"));
     }
@@ -93,7 +96,7 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
     void everyResponseCarriesAGeneratedRequestIdWhenTheClientSuppliesNone() throws Exception {
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk())
-                .andExpect(header().exists("X-Request-Id"));
+                .andExpect(header().exists("X-UNICHE-Request-Id"));
     }
 
     // --- Reading, and the reconciliation it performs ----------------------------------------------
@@ -120,7 +123,7 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
 
         mockMvc.perform(authenticated(get("/api/v1/projects/{id}", PROJECT_ID)))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.type").value("RESOURCE_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
 
         assertThat(projects.findById(PROJECT_ID).orElseThrow().isLocallyDeleted()).isTrue();
         assertThat(projects.findByIdAndLocallyDeletedAtIsNull(PROJECT_ID)).isEmpty();
@@ -146,7 +149,7 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
 
         mockMvc.perform(authenticated(get("/api/v1/projects/{id}", PROJECT_ID)))
                 .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.type").value("UPSTREAM_UNAVAILABLE"));
+                .andExpect(jsonPath("$.code").value("UPSTREAM_UNAVAILABLE"));
 
         assertThat(projects.findById(PROJECT_ID).orElseThrow().isLocallyDeleted()).isFalse();
     }
@@ -158,7 +161,7 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
 
         mockMvc.perform(authenticated(get("/api/v1/projects/{id}", PROJECT_ID)))
                 .andExpect(status().isGatewayTimeout())
-                .andExpect(jsonPath("$.type").value("UPSTREAM_TIMEOUT"));
+                .andExpect(jsonPath("$.code").value("UPSTREAM_TIMEOUT"));
     }
 
     // --- Writing -----------------------------------------------------------------------------------
@@ -199,7 +202,7 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
                                 {"name": "Museum of Naxos", "slug": "museum-of-naxos"}
                                 """))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.type").value("CONFLICT"));
+                .andExpect(jsonPath("$.code").value("CONFLICT"));
     }
 
     @Test
@@ -213,7 +216,7 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
                                 {"name": "Museum of Naxos", "slug": "museum-of-naxos"}
                                 """))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.type").value("FORBIDDEN"));
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
         assertThat(projects.count()).isZero();
     }
@@ -303,7 +306,7 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
                                         {"name": "", "slug": "Not A Valid Slug"}
                                         """))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.type").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.errors[*].path").exists())
                 .andReturn().getResponse().getContentAsString();
 
@@ -317,7 +320,7 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"name\": \"secret-looking-value\", "))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.type").value("MALFORMED_REQUEST"))
+                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"))
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(response).doesNotContain("secret-looking-value");

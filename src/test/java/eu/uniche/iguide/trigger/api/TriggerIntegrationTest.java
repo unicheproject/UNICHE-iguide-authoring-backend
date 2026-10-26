@@ -68,7 +68,7 @@ class TriggerIntegrationTest extends ContentIntegrationTest {
         Map<String, Object> beacon = Map.of("triggerType", "BEACON",
                 "configuration", Map.of("uuid", BEACON_UUID, "major", 1, "minor", 14));
         create(beacon, 201);
-        assertThat(create(beacon, 409).get("type").asText()).isEqualTo("DUPLICATE_VALUE");
+        assertThat(create(beacon, 409).get("code").asText()).isEqualTo("DUPLICATE_VALUE");
     }
 
     @Test
@@ -258,7 +258,7 @@ class TriggerIntegrationTest extends ContentIntegrationTest {
             JsonNode trigger = createFor(kind, targetId, 201);
 
             JsonNode inUse = changeStatus(targetUrl(PROJECT_A, kind), targetId, "ARCHIVED", target.get("version").asLong(), 409);
-            assertThat(inUse.get("type").asText()).isEqualTo("RESOURCE_IN_USE");
+            assertThat(inUse.get("code").asText()).isEqualTo("RESOURCE_IN_USE");
             assertThat(inUse.get("references").get(0).get("resourceType").asText()).isEqualTo("TRIGGER");
             assertThat(inUse.get("references").get(0).get("resourceId").asText()).isEqualTo(trigger.get("id").asText());
             mockMvc.perform(authenticated(get(targetUrl(PROJECT_A, kind) + "/{id}/references", targetId)))

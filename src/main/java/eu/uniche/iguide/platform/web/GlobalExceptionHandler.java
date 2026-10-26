@@ -15,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,7 +29,8 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
- * Maps every exception that can reach a controller boundary onto the status contract of this API.
+ * Maps every exception that can reach a controller boundary onto the status contract of this API, each as an RFC
+ * 7807 problem details body ({@link ErrorEnvelope}, {@code 07} section 15, DECISIONS.md D-034).
  *
  * <p>{@code 401} never arrives here. The resource server emits it directly, with a
  * {@code WWW-Authenticate: Bearer} header, before dispatch. Neither the correlation filter nor the
@@ -54,9 +57,9 @@ public class GlobalExceptionHandler {
                 ? conflict.currentVersion() : null;
         List<?> references = exception instanceof ResourceInUseException inUse
                 ? inUse.references() : List.of();
-        return ResponseEntity.status(exception.status()).body(ErrorEnvelope.of(exception.type(),
-                exception.getMessage(), exception.status().value(), exception.errors(), currentVersion,
-                references));
+        return ResponseEntity.status(exception.status()).contentType(ErrorEnvelope.PROBLEM_JSON)
+                .body(ErrorEnvelope.of(exception.type(), exception.getMessage(), exception.status().value(),
+                        exception.errors(), currentVersion, references));
     }
 
     // --- Catalogue failures ----------------------------------------------------------------------
@@ -157,6 +160,18 @@ public class GlobalExceptionHandler {
                 "The request could not be parsed.");
     }
 
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorEnvelope> handleMethodNotAllowed(HttpRequestMethodNotSupportedException exception) {
+        return respond(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED",
+                "This endpoint does not take that method.");
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorEnvelope> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException exception) {
+        return respond(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE",
+                "The request body is not in a format this endpoint takes.");
+    }
+
     @ExceptionHandler({NoHandlerFoundException.class, NoResourceFoundException.class})
     public ResponseEntity<ErrorEnvelope> handleNoHandler(Exception exception) {
         return respond(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "No such endpoint.");
@@ -179,16 +194,16 @@ public class GlobalExceptionHandler {
     }
 
     private static ResponseEntity<ErrorEnvelope> respond(HttpStatus status,
-                                                         String type,
-                                                         String title) {
-        return respond(status, type, title, List.of());
+                                                         String code,
+                                                         String detail) {
+        return respond(status, code, detail, List.of());
     }
 
     private static ResponseEntity<ErrorEnvelope> respond(HttpStatus status,
-                                                         String type,
-                                                         String title,
+                                                         String code,
+                                                         String detail,
                                                          List<ErrorItem> errors) {
-        return ResponseEntity.status(status)
-                .body(ErrorEnvelope.of(type, title, status.value(), errors));
+        return ResponseEntity.status(status).contentType(ErrorEnvelope.PROBLEM_JSON)
+                .body(ErrorEnvelope.of(code, detail, status.value(), errors));
     }
 }

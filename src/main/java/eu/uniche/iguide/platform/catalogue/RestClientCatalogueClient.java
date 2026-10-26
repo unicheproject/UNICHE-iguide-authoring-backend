@@ -60,6 +60,7 @@ public class RestClientCatalogueClient implements CatalogueClient {
                     String requestId = CorrelationIdFilter.currentRequestId();
                     if (requestId != null) {
                         request.getHeaders().add(CorrelationIdFilter.HEADER, requestId);
+                        request.getHeaders().add(CorrelationIdFilter.CATALOGUE_HEADER, requestId);
                     }
                 })
                 .defaultStatusHandler(HttpStatusCode::isError, RestClientCatalogueClient::mapError)

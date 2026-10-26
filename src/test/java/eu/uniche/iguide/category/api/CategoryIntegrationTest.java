@@ -106,7 +106,7 @@ class CategoryIntegrationTest extends ContentIntegrationTest {
 
         assertThat(bind("pois", poi, trails, 422).get("errors").get(0).get("code").asText()).isEqualTo("SCOPE_MISMATCH");
         JsonNode binding = bind("pois", poi, sculpture, 201);
-        assertThat(bind("pois", poi, pottery, 409).get("type").asText()).isEqualTo("DUPLICATE_VALUE");
+        assertThat(bind("pois", poi, pottery, 409).get("code").asText()).isEqualTo("DUPLICATE_VALUE");
 
         mockMvc.perform(authenticated(get(poiUrl(PROJECT_A) + "/{id}", poi.get("id").asText())))
                 .andExpect(jsonPath("$.categoryIds[0]").value(sculpture.get("id").asText()));

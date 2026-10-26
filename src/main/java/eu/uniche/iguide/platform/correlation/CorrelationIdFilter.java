@@ -26,7 +26,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class CorrelationIdFilter extends OncePerRequestFilter {
 
-    public static final String HEADER = "X-Request-Id";
+    /** The platform correlation header ({@code 10} section 8, [ARC_7.9]), on every response. */
+    public static final String HEADER = "X-UNICHE-Request-Id";
+    /** Accepted inbound as an alias of {@link #HEADER} (DECISIONS.md D-034). */
+    public static final String LEGACY_HEADER = "X-Request-Id";
+    /** The only header the Catalogue correlates on today; sent to it beside {@link #HEADER} (DECISIONS.md D-012). */
+    public static final String CATALOGUE_HEADER = "X-Correlation-Id";
     public static final String MDC_KEY = "requestId";
 
     private static final int MAX_LENGTH = 64;
@@ -41,7 +46,8 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
-        String requestId = resolve(request.getHeader(HEADER));
+        String supplied = request.getHeader(HEADER);
+        String requestId = resolve(supplied != null ? supplied : request.getHeader(LEGACY_HEADER));
         MDC.put(MDC_KEY, requestId);
         response.setHeader(HEADER, requestId);
         try {
