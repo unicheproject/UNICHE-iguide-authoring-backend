@@ -203,6 +203,16 @@ None open. Q-002 and Q-003 were resolved on 2026-10-02 and are kept here for ref
   both at path `stops`.
 - Assumption taken: as proposed (D-033).
 
+### Q-018 — Who calls the AI gateway
+
+- Kind: open-decision (answered for now)
+- Source: `09` §16, first point: "whether the CMS calls the gateway REST API directly with the user's token or the
+  backend calls it with client credentials, which decides where `provenance` is written"; `08` Milestone 13.
+- Answer taken (D-035): the backend calls it, through the `TranslationGateway` port, and writes `provenance` with the
+  text; the CMS never calls the gateway (AGENTS.md §4 rule 3). Whether the backend forwards the user's token or uses
+  client credentials waits for the gateway API; only a labelled mock exists until then (G-037).
+- Still open in `09` §16: the Java SDK or adapter, the functions after translation, and how citations are shown.
+
 ### Open decisions of `09` that shape the next milestones
 
 | `09` | Shapes or blocks |
@@ -218,6 +228,6 @@ None open. Q-002 and Q-003 were resolved on 2026-10-02 and are kept here for ref
 | §8 runtime compatibility policy | Milestone 8 |
 | §1 deployment package generation | Milestone 11 |
 | §15 ICAgent contract | Milestone 12 |
-| §16 AI gateway | Milestone 13 |
+| §16 AI gateway | Milestone 13 (who calls it: Q-018, D-035) |
 | §18 OpenAPI collection, horizontal SDKs | contract publication; DECISIONS.md D-004 proceeds |
 | §28 surfaces of the first pilot | QR codes, mobile-only features |

@@ -34,3 +34,11 @@ COMMENT ON COLUMN resource_working_copies.payload IS
 COMMENT ON COLUMN resource_working_copies.base_version IS
     'The version of the live row the copy was made from; apply refuses when the live row moved past it.';
 --rollback DROP TABLE resource_working_copies;
+
+--changeset iguide:0036-add-working-copy-translation-provenance
+--comment Content provenance (03 section 1) of machine translations written into a working copy, carried to the rows on apply
+ALTER TABLE resource_working_copies ADD COLUMN translation_provenance jsonb;
+
+COMMENT ON COLUMN resource_working_copies.translation_provenance IS
+    'Language code to the provenance its translation row gets on apply (null clears it); dropped on discard. Never reaches the manifest.';
+--rollback ALTER TABLE resource_working_copies DROP COLUMN translation_provenance;

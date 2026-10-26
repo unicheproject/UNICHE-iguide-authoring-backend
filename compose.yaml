@@ -26,6 +26,8 @@ services:
       ASSETS_S3_BUCKET: ${ASSETS_S3_BUCKET:-iguide-assets}
       ASSETS_S3_ACCESS_KEY: ${ASSETS_S3_ACCESS_KEY:-iguide}
       ASSETS_S3_SECRET_KEY: ${ASSETS_S3_SECRET_KEY:-change-me-minio}
+      # The labelled mock MuseMind translation for the local stack (DECISIONS.md D-035); never under prod.
+      IGUIDE_AI_GATEWAY_MODE: ${IGUIDE_AI_GATEWAY_MODE:-mock}
     ports:
       - "${SERVER_PORT:-8080}:8080"
     depends_on:

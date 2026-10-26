@@ -58,6 +58,10 @@ public class ResourceTranslationController {
     }
 
     private WorkingCopyResourceType kindOf(String kind) {
+        return kindOf(handlers, kind);
+    }
+
+    static WorkingCopyResourceType kindOf(WorkingCopyHandlers handlers, String kind) {
         WorkingCopyResourceType type = handlers.typeOf(kind);
         if (!ResourceTranslationUseCase.KINDS.contains(type)) {
             throw new ResourceNotFoundException("This kind of resource has no translations.");

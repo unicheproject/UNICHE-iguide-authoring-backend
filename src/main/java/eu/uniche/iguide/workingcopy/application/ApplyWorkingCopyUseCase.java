@@ -7,6 +7,7 @@ import eu.uniche.iguide.platform.web.VersionConflictException;
 import eu.uniche.iguide.workingcopy.domain.ResourceWorkingCopy;
 import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import eu.uniche.iguide.workingcopy.infrastructure.ResourceWorkingCopyRepository;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -15,7 +16,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * {@code POST .../{kind}/{id}/working-copy:apply} ({@code 03} section 1, {@code 06} section 17): in one
  * transaction, reads the live row for update, refuses with {@code 409} and {@code currentVersion} when it moved
  * past {@code baseVersion}, writes the payload like a normal save, and deletes the copy. Returns the Resource as
- * it now reads.
+ * it now reads. The {@link WorkingCopyApplyHook}s carry what else the copy holds, such as the provenance of machine
+ * translations (DECISIONS.md D-035).
  *
  * <p>Not yet: the {@code contentRevision} increment (no Project settings, GAPS.md G-024) and the
  * {@code RESOURCE_CHANGES_APPLIED} Audit Event (Milestone 7, GAPS.md G-023); see GAPS.md G-034.
@@ -26,13 +28,16 @@ public class ApplyWorkingCopyUseCase {
     private final ProjectAccessGateway accessGateway;
     private final WorkingCopyHandlers handlers;
     private final ResourceWorkingCopyRepository copies;
+    private final List<WorkingCopyApplyHook> hooks;
     private final TransactionTemplate transactionTemplate;
 
     public ApplyWorkingCopyUseCase(ProjectAccessGateway accessGateway, WorkingCopyHandlers handlers,
-                                   ResourceWorkingCopyRepository copies, TransactionTemplate transactionTemplate) {
+                                   ResourceWorkingCopyRepository copies, List<WorkingCopyApplyHook> hooks,
+                                   TransactionTemplate transactionTemplate) {
         this.accessGateway = accessGateway;
         this.handlers = handlers;
         this.copies = copies;
+        this.hooks = List.copyOf(hooks);
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -50,6 +55,7 @@ public class ApplyWorkingCopyUseCase {
                         "The " + type.label() + " was changed since its pending changes were started.", live.version());
             }
             handler.write(projectId, resourceId, principal, handlers.read(handler, copy.getPayload()));
+            hooks.forEach(hook -> hook.applied(projectId, type, resourceId));
             copies.delete(copy);
             copies.flush();
             return handler.render(projectId, resourceId, null);

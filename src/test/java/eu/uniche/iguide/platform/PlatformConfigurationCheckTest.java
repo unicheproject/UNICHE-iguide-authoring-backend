@@ -65,6 +65,34 @@ class PlatformConfigurationCheckTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void refusesTheMockAiGatewayUnderTheProdProfile() {
+        StandardEnvironment environment = environmentWith(configuredWith("mock"));
+        environment.setActiveProfiles("prod");
+        assertThatThrownBy(() -> check.postProcessEnvironment(environment, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("prod");
+
+        StandardEnvironment disabled = environmentWith(configuredWith("disabled"));
+        disabled.setActiveProfiles("prod");
+        assertThatCode(() -> check.postProcessEnvironment(disabled, null)).doesNotThrowAnyException();
+        assertThatCode(() -> check.postProcessEnvironment(environmentWith(configuredWith("mock")), null))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void refusesAnUnknownAiGatewayMode() {
+        assertThatThrownBy(() -> check.postProcessEnvironment(environmentWith(configuredWith("openai")), null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("IGUIDE_AI_GATEWAY_MODE");
+    }
+
+    private static Map<String, Object> configuredWith(String aiGatewayMode) {
+        return Map.of("spring.security.oauth2.resourceserver.jwt.issuer-uri", "https://idp.example/realms/uniche",
+                "uniche.catalogue.base-url", "https://platform.example",
+                PlatformConfigurationCheck.AI_GATEWAY_MODE, aiGatewayMode);
+    }
+
     private static StandardEnvironment environmentWith(Map<String, Object> properties) {
         StandardEnvironment environment = new StandardEnvironment();
         environment.getPropertySources()
