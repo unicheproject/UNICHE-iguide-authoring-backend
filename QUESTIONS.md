@@ -213,6 +213,16 @@ None open. Q-002 and Q-003 were resolved on 2026-10-02 and are kept here for ref
   client credentials waits for the gateway API; only a labelled mock exists until then (G-037).
 - Still open in `09` §16: the Java SDK or adapter, the functions after translation, and how citations are shown.
 
+### Q-019 — What applying a working copy validates
+
+- Kind: spec-change-request
+- Source: `03` §1: "apply ... validates the payload like a normal save"; `07` §14 (line 500): "`working-copy:apply`
+  validates the payload as a normal save"; `14` §2: "Blocking issues prevent activation of the Application and
+  application of a working copy".
+- Proposed: in `03` §1 and `07` §14, "apply validates the payload like a normal save and refuses with `422` when the
+  write would add blocking readiness issues to the Project (`14` §2); issues the Project already had do not block".
+- Assumption taken: as proposed (D-037).
+
 ### Open decisions of `09` that shape the next milestones
 
 | `09` | Shapes or blocks |

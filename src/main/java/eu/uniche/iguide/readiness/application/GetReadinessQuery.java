@@ -105,18 +105,26 @@ public class GetReadinessQuery {
         accessGateway.requireAccess(projectId, principal);
         return transactionTemplate.execute(status -> {
             status.setRollbackOnly();
-            List<String> codes = languages.enabledLanguages(projectId).stream()
-                    .map(ProjectLanguage::getLanguageCode).toList();
-            String defaultLanguage = languages.enabledLanguages(projectId).stream()
-                    .filter(ProjectLanguage::isDefaultLanguage).map(ProjectLanguage::getLanguageCode)
-                    .findFirst().orElse(null);
-            ReadinessContext context = new ReadinessContext(projectId, defaultLanguage, codes,
-                    index(projectId, defaultLanguage));
-            ReadinessReport report = new ReadinessReport();
-            checks.forEach(check -> check.check(context, report));
-            List<ReadinessIssue> blocking = report.blocking();
-            return new Readiness(blocking.isEmpty(), blocking, report.warnings());
+            return evaluate(projectId);
         });
+    }
+
+    /**
+     * The evaluation itself, inside the caller's transaction and without an access check: the caller has checked
+     * access and may have written rows the evaluation must see, such as an apply (DECISIONS.md D-037).
+     */
+    public Readiness evaluate(UUID projectId) {
+        List<String> codes = languages.enabledLanguages(projectId).stream()
+                .map(ProjectLanguage::getLanguageCode).toList();
+        String defaultLanguage = languages.enabledLanguages(projectId).stream()
+                .filter(ProjectLanguage::isDefaultLanguage).map(ProjectLanguage::getLanguageCode)
+                .findFirst().orElse(null);
+        ReadinessContext context = new ReadinessContext(projectId, defaultLanguage, codes,
+                index(projectId, defaultLanguage));
+        ReadinessReport report = new ReadinessReport();
+        checks.forEach(check -> check.check(context, report));
+        List<ReadinessIssue> blocking = report.blocking();
+        return new Readiness(blocking.isEmpty(), blocking, report.warnings());
     }
 
     private ResourceIndex index(UUID projectId, String language) {
