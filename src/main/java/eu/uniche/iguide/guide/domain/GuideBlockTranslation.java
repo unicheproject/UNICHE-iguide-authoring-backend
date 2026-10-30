@@ -56,7 +56,12 @@ public class GuideBlockTranslation {
         this.caption = caption;
     }
 
-    public boolean hasText() {
-        return text != null && text.hasText();
+    /** A TEXT block's text or image in this language; an image alone counts (DECISIONS.md D-038). */
+    public boolean hasContent() {
+        return text != null && text.hasContent();
+    }
+
+    public boolean hasCaption() {
+        return caption != null && !caption.isBlank();
     }
 }

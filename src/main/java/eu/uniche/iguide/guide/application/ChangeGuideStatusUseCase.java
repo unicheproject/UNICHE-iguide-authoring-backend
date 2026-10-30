@@ -88,10 +88,10 @@ public class ChangeGuideStatusUseCase {
         for (int i = 0; i < view.blocks().size(); i++) {
             BlockView block = view.blocks().get(i);
             boolean texted = block.translations().stream()
-                    .anyMatch(t -> t.getLanguageCode().equals(defaultLanguage) && t.hasText());
+                    .anyMatch(t -> t.getLanguageCode().equals(defaultLanguage) && t.hasContent());
             if (block.block().getBlockType() == GuideBlockType.TEXT && !texted) {
                 missing.add(new ErrorItem("blocks[" + i + "].translations." + defaultLanguage + ".text",
-                        "MISSING_REQUIRED_FIELDS", "Text is required in the default language."));
+                        "MISSING_REQUIRED_FIELDS", "Text or an image is required in the default language."));
             }
         }
         if (!missing.isEmpty()) {

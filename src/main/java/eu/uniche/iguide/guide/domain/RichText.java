@@ -16,7 +16,9 @@ public record RichText(List<Node> blocks) {
     public record Node(String type, String text, Integer level, String assetId) {
     }
 
-    public boolean hasText() {
-        return blocks != null && blocks.stream().anyMatch(n -> n.text() != null && !n.text().isBlank());
+    /** Whether a node holds anything a visitor sees: non-blank text, or an image (DECISIONS.md D-038). */
+    public boolean hasContent() {
+        return blocks != null && blocks.stream().anyMatch(n -> (n.text() != null && !n.text().isBlank())
+                || (ASSET.equals(n.type()) && n.assetId() != null));
     }
 }

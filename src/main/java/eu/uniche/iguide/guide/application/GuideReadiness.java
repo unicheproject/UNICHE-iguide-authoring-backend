@@ -19,13 +19,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /**
- * Readiness of ACTIVE Guides ({@code 03} section 1, section 11; DECISIONS.md D-033): the title, at least one block, and
- * text on every TEXT block in the default language; translations of the title, summary, and story (the first TEXT
- * block, as the CMS edits it); reference blocks whose target is gone or archived.
+ * Readiness of ACTIVE Guides ({@code 03} section 1, section 11; DECISIONS.md D-033, D-038): the title, at least one
+ * block, and text or an image on every TEXT block in the default language; translations of the title, the summary,
+ * every TEXT block, and every caption the default language has; reference blocks whose target is gone or archived.
  */
 @Component
 public class GuideReadiness implements ReadinessCheck {
@@ -57,12 +58,11 @@ public class GuideReadiness implements ReadinessCheck {
                 GuideTranslation::getLanguageCode, t -> Texts.of("title", t.getTitle(), "summary", t.getSummary()));
         List<GuideBlock> allBlocks = blocks.findByProjectIdAndGuideIdInOrderBySortOrderAsc(context.projectId(), active);
         Map<UUID, List<GuideBlock>> byGuide = allBlocks.stream().collect(Collectors.groupingBy(GuideBlock::getGuideId));
-        Map<UUID, Set<String>> textedLanguages = allBlocks.isEmpty() ? Map.of()
+        List<GuideBlockTranslation> blockTexts = allBlocks.isEmpty() ? List.of()
                 : blockTranslations.findByProjectIdAndGuideBlockIdIn(context.projectId(),
-                                allBlocks.stream().map(GuideBlock::getId).toList()).stream()
-                        .filter(GuideBlockTranslation::hasText)
-                        .collect(Collectors.groupingBy(GuideBlockTranslation::getGuideBlockId,
-                                Collectors.mapping(GuideBlockTranslation::getLanguageCode, Collectors.toSet())));
+                        allBlocks.stream().map(GuideBlock::getId).toList());
+        Map<UUID, Set<String>> textedLanguages = languagesWhere(blockTexts, GuideBlockTranslation::hasContent);
+        Map<UUID, Set<String>> captionedLanguages = languagesWhere(blockTexts, GuideBlockTranslation::hasCaption);
         String language = context.defaultLanguage();
         for (UUID id : active) {
             String title = context.index().title("GUIDE", id);
@@ -71,28 +71,44 @@ public class GuideReadiness implements ReadinessCheck {
             if (own.isEmpty() && language != null) {
                 report.block("GUIDE", id, title, language, "blocks", "MISSING_DEFAULT_LANGUAGE_VALUE");
             }
-            boolean story = true;
             for (int i = 0; i < own.size(); i++) {
                 GuideBlock block = own.get(i);
+                String path = "blocks[" + i + "].translations.";
                 if (block.getBlockType() == GuideBlockType.TEXT) {
                     Set<String> texted = textedLanguages.getOrDefault(block.getId(), Set.of());
-                    String path = "blocks[" + i + "].translations.";
                     if (language != null && !texted.contains(language)) {
                         report.block("GUIDE", id, title, language, path + language + ".text",
                                 "MISSING_DEFAULT_LANGUAGE_VALUE");
-                    } else if (story && language != null) {
-                        for (String other : context.otherLanguages()) {
-                            if (!texted.contains(other)) {
-                                report.warn("GUIDE", id, title, other, path + other + ".text", "MISSING_TRANSLATION");
-                            }
-                        }
+                    } else if (language != null) {
+                        untranslated(context, report, id, title, texted, path, ".text");
                     }
-                    story = false;
-                } else if (block.getResourceType() != null && block.getResourceType() != GuideTargetType.PAGE
-                        && context.index().dangling(block.getResourceType().name(), block.getResourceId())) {
-                    report.block("GUIDE", id, title, null, "blocks[" + i + "].resourceId", "DANGLING_REFERENCE");
+                } else {
+                    // A caption is optional; once the default language has one, the others should too.
+                    Set<String> captioned = captionedLanguages.getOrDefault(block.getId(), Set.of());
+                    if (language != null && captioned.contains(language)) {
+                        untranslated(context, report, id, title, captioned, path, ".caption");
+                    }
+                    if (block.getResourceType() != null && block.getResourceType() != GuideTargetType.PAGE
+                            && context.index().dangling(block.getResourceType().name(), block.getResourceId())) {
+                        report.block("GUIDE", id, title, null, "blocks[" + i + "].resourceId", "DANGLING_REFERENCE");
+                    }
                 }
             }
         }
+    }
+
+    private static void untranslated(ReadinessContext context, ReadinessReport report, UUID guideId, String title,
+                                     Set<String> present, String path, String field) {
+        for (String other : context.otherLanguages()) {
+            if (!present.contains(other)) {
+                report.warn("GUIDE", guideId, title, other, path + other + field, "MISSING_TRANSLATION");
+            }
+        }
+    }
+
+    private static Map<UUID, Set<String>> languagesWhere(List<GuideBlockTranslation> rows,
+                                                         Predicate<GuideBlockTranslation> filled) {
+        return rows.stream().filter(filled).collect(Collectors.groupingBy(GuideBlockTranslation::getGuideBlockId,
+                Collectors.mapping(GuideBlockTranslation::getLanguageCode, Collectors.toSet())));
     }
 }

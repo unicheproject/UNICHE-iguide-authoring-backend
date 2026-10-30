@@ -165,6 +165,44 @@ class ReadinessIntegrationTest extends ContentIntegrationTest {
     }
 
     @Test
+    void everyGuideBlockAndCaptionWarnsAndAnImageAloneFillsATextBlock() throws Exception {
+        web(PROJECT_A, true, "https://guide.museum.gr");
+        JsonNode image = uploadAsset(PROJECT_A, "kouros.png", "image/png", png(10, 10));
+        JsonNode texted = read(mockMvc.perform(json(put(assetUrl(PROJECT_A) + "/{id}/translations/el",
+                        image.get("id").asText()), Map.of("version", image.get("version").asLong(),
+                        "alternativeText", "Μαρμάρινος κούρος")))
+                .andExpect(status().isOk()).andReturn());
+        changeStatus(assetUrl(PROJECT_A), image.get("id").asText(), "ACTIVE", texted.get("version").asLong(), 200);
+        JsonNode poi = createPoi(PROJECT_A, "{\"title\": \"Κούρος\"}");
+        JsonNode guide = read(mockMvc.perform(json(post("/api/v1/projects/{p}/guides", PROJECT_A),
+                Map.of("title", "Ιστορία"))).andExpect(status().isCreated()).andReturn());
+        String blocks = "/api/v1/projects/" + PROJECT_A + "/guides/" + guide.get("id").asText() + "/blocks";
+        for (Map<String, Object> block : List.of(
+                Map.<String, Object>of("blockType", "TEXT", "translations", Map.of("el", Map.of("text",
+                        Map.of("blocks", List.of(Map.of("type", "paragraph", "text", "Κείμενο")))))),
+                Map.<String, Object>of("blockType", "TEXT", "translations", Map.of("el", Map.of("text",
+                        Map.of("blocks", List.of(Map.of("type", "asset", "assetId", image.get("id").asText())))))),
+                Map.<String, Object>of("blockType", "REFERENCE", "resourceType", "POI",
+                        "resourceId", poi.get("id").asText(), "translations", Map.of("el", Map.of("caption", "Δείτε"))),
+                Map.<String, Object>of("blockType", "REFERENCE", "resourceType", "POI",
+                        "resourceId", poi.get("id").asText()))) {
+            mockMvc.perform(json(post(blocks), block)).andExpect(status().isCreated());
+        }
+        JsonNode current = read(mockMvc.perform(authenticated(get("/api/v1/projects/{p}/guides/{id}", PROJECT_A,
+                guide.get("id").asText()))).andReturn());
+
+        // The image-only text block is content, so the Guide activates.
+        changeStatus("/api/v1/projects/" + PROJECT_A + "/guides", guide.get("id").asText(), "ACTIVE",
+                current.get("version").asLong(), 200);
+        assertThat(codes(readiness(PROJECT_A).get("warnings"))).filteredOn(c -> c.startsWith("GUIDE:"))
+                .containsExactlyInAnyOrder(
+                        "GUIDE:translations.en.title:MISSING_TRANSLATION",
+                        "GUIDE:blocks[0].translations.en.text:MISSING_TRANSLATION",
+                        "GUIDE:blocks[1].translations.en.text:MISSING_TRANSLATION",
+                        "GUIDE:blocks[2].translations.en.caption:MISSING_TRANSLATION");
+    }
+
+    @Test
     void aWorkingCopyIsPendingAndEveryProjectIsEvaluatedAlone() throws Exception {
         web(PROJECT_A, true, "https://guide.museum.gr");
         JsonNode place = createPlace(PROJECT_A, "Ακρόπολη", "SITE");
