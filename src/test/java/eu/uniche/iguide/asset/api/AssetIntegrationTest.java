@@ -9,21 +9,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import eu.uniche.iguide.asset.application.PurgeAssetObjectsUseCase;
 import eu.uniche.iguide.support.ContentIntegrationTest;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockMultipartFile;
 
 /** Assets: upload to S3, metadata, texts, lifecycle, and where-used ({@code 03} section 4, {@code 08} Milestone 3). */
 class AssetIntegrationTest extends ContentIntegrationTest {
+
+    @Autowired
+    private PurgeAssetObjectsUseCase purge;
 
     @BeforeEach
     void setUpLanguages() throws Exception {
@@ -152,6 +161,29 @@ class AssetIntegrationTest extends ContentIntegrationTest {
     // --- Where used and isolation ----------------------------------------------------------------
 
     @Test
+    void audioRecordsItsDurationAndAReplacedFileIsDeletedOnceItsSignedUrlsHaveExpired() throws Exception {
+        JsonNode asset = uploadAsset(PROJECT_A, "intro.wav", "audio/wav", wav(8_000, 12_000));
+        assertThat(asset.get("type").asText()).isEqualTo("AUDIO");
+        assertThat(asset.get("durationSeconds").decimalValue()).isEqualByComparingTo("1.5");
+        String oldUrl = asset.get("url").asText();
+
+        JsonNode replaced = replace(asset, "intro-v2.wav", "audio/wav", wav(8_000, 16_000), 200);
+        assertThat(replaced.get("durationSeconds").decimalValue()).isEqualByComparingTo("2");
+        // A page that is open keeps reading the old file until its signed URL expires.
+        assertThat(fetch(oldUrl)).isEqualTo(200);
+        purge.purgeDue(Instant.now());
+        assertThat(fetch(oldUrl)).isEqualTo(200);
+
+        assertThat(purge.purgeDue(Instant.now().plus(Duration.ofHours(1)))).isPositive();
+        assertThat(fetch(oldUrl)).isEqualTo(404);
+        assertThat(fetch(replaced.get("url").asText())).isEqualTo(200);
+
+        // A file that is not a recording the backend can read keeps no duration.
+        JsonNode silent = uploadAsset(PROJECT_A, "noise.mp3", "audio/mpeg", new byte[] {1, 2, 3, 4});
+        assertThat(silent.get("durationSeconds").isNull()).isTrue();
+    }
+
+    @Test
     void aFloorPlanImageIsCheckedAndKeepsTheAssetInUse() throws Exception {
         JsonNode pdf = uploadAsset(PROJECT_A, "plan.pdf", "application/pdf", new byte[]{1});
         mockMvc.perform(json(post("/api/v1/projects/{p}/floor-plans", PROJECT_A),
@@ -208,6 +240,21 @@ class AssetIntegrationTest extends ContentIntegrationTest {
         body.putIfAbsent("internalName", asset.get("internalName").asText());
         return read(mockMvc.perform(json(put(assetUrl(PROJECT_A) + "/{id}", asset.get("id").asText()), body))
                 .andExpect(status().is(expected)).andReturn());
+    }
+
+    private static int fetch(String url) throws Exception {
+        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create(url)).build(),
+                HttpResponse.BodyHandlers.discarding()).statusCode();
+    }
+
+    /** A PCM WAV file of silence: 8-bit mono, so {@code byteRate} bytes make one second. */
+    private static byte[] wav(int byteRate, int dataBytes) {
+        ByteBuffer b = ByteBuffer.allocate(44 + dataBytes).order(ByteOrder.LITTLE_ENDIAN);
+        b.put("RIFF".getBytes(StandardCharsets.US_ASCII)).putInt(36 + dataBytes)
+                .put("WAVEfmt ".getBytes(StandardCharsets.US_ASCII)).putInt(16).putShort((short) 1).putShort((short) 1)
+                .putInt(byteRate).putInt(byteRate).putShort((short) 1).putShort((short) 8)
+                .put("data".getBytes(StandardCharsets.US_ASCII)).putInt(dataBytes);
+        return b.array();
     }
 
     private JsonNode replace(JsonNode asset, String filename, String type, byte[] bytes, int expected) throws Exception {

@@ -14,7 +14,6 @@ import eu.uniche.iguide.route.application.ListRoutesQuery;
 import eu.uniche.iguide.route.application.ReorderRoutesUseCase;
 import eu.uniche.iguide.route.application.RouteStopUseCase;
 import eu.uniche.iguide.route.application.RouteView;
-import eu.uniche.iguide.route.application.StopView;
 import eu.uniche.iguide.route.application.UpdateRouteCommand;
 import eu.uniche.iguide.route.application.UpdateRouteUseCase;
 import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
@@ -139,10 +138,10 @@ public class RouteController {
     @PostMapping("/routes/{routeId}/stops")
     public ResponseEntity<RouteResponse.Stop> addStop(@PathVariable UUID projectId, @PathVariable UUID routeId,
                                                       @RequestBody RouteRequests.Stop request) {
-        StopView created = stops.add(projectId, routeId, CurrentPrincipal.require(), request.poiId(),
-                request.translationInputs());
+        RouteStopUseCase.StopData created = stops.add(projectId, routeId, CurrentPrincipal.require(),
+                request.poiId(), request.translationInputs());
         return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/routes/" + routeId + "/stops/"
-                + created.stop().getId())).body(RouteResponse.Stop.from(created));
+                + created.id())).body(RouteResponse.Stop.from(created));
     }
 
     @PutMapping("/routes/{routeId}/stops/{stopId}")

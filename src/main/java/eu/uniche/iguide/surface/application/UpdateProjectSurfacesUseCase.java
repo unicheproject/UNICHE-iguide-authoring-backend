@@ -4,6 +4,7 @@ import eu.uniche.iguide.platform.projectaccess.ProjectAccessGateway;
 import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.platform.web.ErrorItem;
 import eu.uniche.iguide.resource.application.ResourceRules;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import eu.uniche.iguide.surface.domain.ProjectSurface;
 import eu.uniche.iguide.surface.domain.Surface;
 import eu.uniche.iguide.surface.infrastructure.ProjectSurfaceRepository;
@@ -31,7 +32,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       {@code publicBaseUrl}, MOBILE and KIOSK nothing yet;
  *   <li>{@code publicBaseUrl} is an origin: {@code https}, or {@code http} for {@code localhost} only; no path, query,
  *       fragment, or user; stored without a trailing slash; blank removes it;
- *   <li>not yet: the Template's {@code supportedSurfaces} (no Templates before Milestone 2, GAPS.md G-035).
+ *   <li>once the Project is initialized, a surface its Template does not support cannot be enabled
+ *       ({@code 03} section 2, {@code 04} section 11; DECISIONS.md D-040); before, every surface can.
  * </ul>
  */
 @Service
@@ -41,20 +43,31 @@ public class UpdateProjectSurfacesUseCase {
             Surface.WEB, Set.of(ProjectSurface.PUBLIC_BASE_URL),
             Surface.MOBILE, Set.of(),
             Surface.KIOSK, Set.of());
+
+    /** The configuration keys a surface accepts; a Template's {@code runtimeDefaults} may use only these. */
+    public static Set<String> configurationKeys(Surface surface) {
+        return KEYS.get(surface);
+    }
     private static final Set<String> LOCAL_HOSTS = Set.of("localhost", "127.0.0.1", "[::1]");
     private static final int MAX_URL = 2048;
 
     private final ProjectAccessGateway accessGateway;
     private final ProjectSurfaceRepository surfaces;
     private final SurfaceLookup lookup;
+    private final SurfaceSupport support;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public UpdateProjectSurfacesUseCase(ProjectAccessGateway accessGateway, ProjectSurfaceRepository surfaces,
-                                        SurfaceLookup lookup, TransactionTemplate transactionTemplate) {
+                                        SurfaceLookup lookup, SurfaceSupport support,
+                                        TransactionTemplate transactionTemplate,
+                                        ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.surfaces = surfaces;
         this.lookup = lookup;
+        this.support = support;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public List<SurfaceView> execute(UUID projectId, UnichePrincipal principal, List<SurfaceInput> requested) {
@@ -63,6 +76,7 @@ public class UpdateProjectSurfacesUseCase {
         List<ErrorItem> errors = new ArrayList<>();
         List<Map<String, Object>> configurations = new ArrayList<>();
         Set<Surface> seen = EnumSet.noneOf(Surface.class);
+        Set<Surface> supported = support.supportedSurfaces(projectId).orElse(EnumSet.allOf(Surface.class));
         for (int i = 0; i < inputs.size(); i++) {
             SurfaceInput input = inputs.get(i);
             String path = "surfaces[" + i + "]";
@@ -73,6 +87,10 @@ public class UpdateProjectSurfacesUseCase {
             }
             if (!seen.add(input.surface())) {
                 errors.add(new ErrorItem(path + ".surface", "DUPLICATE_VALUE", "The surface is listed twice."));
+            }
+            if (input.enabled() && !supported.contains(input.surface())) {
+                errors.add(new ErrorItem(path + ".surface", "SURFACE_NOT_SUPPORTED",
+                        "The Project's Template does not support this surface."));
             }
             configurations.add(configuration(input, path + ".configuration", errors));
         }
@@ -87,6 +105,7 @@ public class UpdateProjectSurfacesUseCase {
                 row.write(input.enabled(), configurations.get(i), now);
                 surfaces.save(row);
             }
+            contentRevision.increment(projectId);
         });
         return lookup.all(projectId);
     }

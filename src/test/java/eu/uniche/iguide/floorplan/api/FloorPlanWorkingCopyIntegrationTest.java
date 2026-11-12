@@ -1,6 +1,7 @@
 package eu.uniche.iguide.floorplan.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -114,14 +115,43 @@ class FloorPlanWorkingCopyIntegrationTest extends ContentIntegrationTest {
     }
 
     @Test
-    void positionsOfAnActivePlanAreNotWrittenDirectly() throws Exception {
-        JsonNode plan = activePlanWith();
-        mockMvc.perform(json(post(plansUrl(PROJECT_A) + "/{id}/positions", id(plan)), Map.of("resourceType", "PLACE",
-                        "resourceId", id(room1), "x", 0.5, "y", 0.5)))
+    void positionWritesOnAnActivePlanGoIntoItsWorkingCopy() throws Exception {
+        JsonNode plan = activePlanWith(room1, room2);
+        JsonNode first = positions(plan).stream()
+                .filter(p -> p.get("resourceId").asText().equals(id(room1))).findFirst().orElseThrow();
+        JsonNode second = positions(plan).stream()
+                .filter(p -> p.get("resourceId").asText().equals(id(room2))).findFirst().orElseThrow();
+
+        JsonNode added = read(mockMvc.perform(json(post(plansUrl(PROJECT_A) + "/{id}/positions", id(plan)),
+                        Map.of("resourceType", "PLACE", "resourceId", id(room3), "x", 0.25, "y", 0.75)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.resourceId").value(id(room3)))
+                .andReturn());
+        mockMvc.perform(json(put(plansUrl(PROJECT_A) + "/{id}/positions/{positionId}", id(plan), id(first)),
+                        Map.of("x", 0.1, "y", 0.2, "rotation", 90)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rotation").value(90));
+        mockMvc.perform(json(put(plansUrl(PROJECT_A) + "/{id}/positions/{positionId}", id(plan), id(added)),
+                        Map.of("x", 2, "y", 0.2)))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.errors[0].code").value("RESOURCE_NOT_EDITABLE"));
-        mockMvc.perform(json(put(plansUrl(PROJECT_A) + "/{id}", id(plan)), Map.of("version", plan.get("version").asLong(),
-                        "internalName", "Renamed", "assetId", id(image))))
+                .andExpect(jsonPath("$.errors[0].path").value("x"));
+        mockMvc.perform(authenticated(delete(plansUrl(PROJECT_A) + "/{id}/positions/{positionId}", id(plan),
+                        id(second))))
+                .andExpect(status().isNoContent());
+        assertThat(positions(plan)).hasSize(2);
+
+        applyWorkingCopy(PROJECT_A, "floor-plans", id(plan), 200);
+        List<JsonNode> now = positions(plan);
+        assertThat(now.stream().map(p -> p.get("resourceId").asText()))
+                .containsExactlyInAnyOrder(id(room1), id(room3));
+        JsonNode turned = now.stream().filter(p -> p.get("id").asText().equals(id(first))).findFirst().orElseThrow();
+        assertThat(turned.get("rotation").asInt()).isEqualTo(90);
+
+        // The plan's own fields still change only through a whole working copy.
+        JsonNode current = read(mockMvc.perform(authenticated(get(plansUrl(PROJECT_A) + "/{id}", id(plan))))
+                .andReturn());
+        mockMvc.perform(json(put(plansUrl(PROJECT_A) + "/{id}", id(plan)), Map.of("version",
+                        current.get("version").asLong(), "internalName", "Renamed", "assetId", id(image))))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errors[0].code").value("RESOURCE_NOT_EDITABLE"));
     }

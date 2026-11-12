@@ -11,6 +11,7 @@ import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
 import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
@@ -34,16 +35,19 @@ public class ChangePlaceStatusUseCase {
     private final PlaceRepository places;
     private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public ChangePlaceStatusUseCase(ProjectAccessGateway accessGateway, ProjectLanguageLookup languages,
                                     PlaceRules rules, PlaceRepository places, WorkingCopyStore workingCopies,
-                                    TransactionTemplate transactionTemplate) {
+                                    TransactionTemplate transactionTemplate,
+                                    ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.languages = languages;
         this.rules = rules;
         this.places = places;
         this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public PlaceView execute(UUID projectId, UUID placeId, UnichePrincipal principal, ResourceStatus target,
@@ -72,6 +76,7 @@ public class ChangePlaceStatusUseCase {
             if (target != ResourceStatus.ACTIVE) {
                 workingCopies.dropFor(projectId, WorkingCopyResourceType.PLACE, placeId);
             }
+            contentRevision.afterTransition(projectId, place.getStatus(), target);
             place.changeStatus(target, principal.subject(), Instant.now());
             return rules.view(places.saveAndFlush(place));
         });

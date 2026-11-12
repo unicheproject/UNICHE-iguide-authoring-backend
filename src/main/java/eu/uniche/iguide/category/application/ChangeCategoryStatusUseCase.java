@@ -11,6 +11,7 @@ import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
 import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
@@ -36,16 +37,19 @@ public class ChangeCategoryStatusUseCase {
     private final CategoryRepository categories;
     private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public ChangeCategoryStatusUseCase(ProjectAccessGateway accessGateway, ProjectLanguageLookup languages,
                                        CategoryRules rules, CategoryRepository categories,
-                                       WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate) {
+                                       WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate,
+                                       ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.languages = languages;
         this.rules = rules;
         this.categories = categories;
         this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public CategoryView execute(UUID projectId, UUID categoryId, UnichePrincipal principal, ResourceStatus target,
@@ -88,6 +92,7 @@ public class ChangeCategoryStatusUseCase {
             if (target != ResourceStatus.ACTIVE) {
                 workingCopies.dropFor(projectId, WorkingCopyResourceType.CATEGORY, categoryId);
             }
+            contentRevision.afterTransition(projectId, category.getStatus(), target);
             category.changeStatus(target, principal.subject(), Instant.now());
             return rules.view(categories.saveAndFlush(category));
         });

@@ -11,6 +11,7 @@ import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
 import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
@@ -34,16 +35,19 @@ public class ChangeEventStatusUseCase {
     private final EventRepository events;
     private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public ChangeEventStatusUseCase(ProjectAccessGateway accessGateway, ProjectLanguageLookup languages,
                                     EventRules rules, EventRepository events, WorkingCopyStore workingCopies,
-                                    TransactionTemplate transactionTemplate) {
+                                    TransactionTemplate transactionTemplate,
+                                    ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.languages = languages;
         this.rules = rules;
         this.events = events;
         this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public EventView execute(UUID projectId, UUID eventId, UnichePrincipal principal, ResourceStatus target,
@@ -72,6 +76,7 @@ public class ChangeEventStatusUseCase {
             if (target != ResourceStatus.ACTIVE) {
                 workingCopies.dropFor(projectId, WorkingCopyResourceType.EVENT, eventId);
             }
+            contentRevision.afterTransition(projectId, event.getStatus(), target);
             event.changeStatus(target, principal.subject(), Instant.now());
             return rules.view(events.saveAndFlush(event));
         });

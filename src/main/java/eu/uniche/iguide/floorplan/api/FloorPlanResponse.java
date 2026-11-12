@@ -1,5 +1,6 @@
 package eu.uniche.iguide.floorplan.api;
 
+import eu.uniche.iguide.floorplan.application.FloorPlanPositionUseCase;
 import eu.uniche.iguide.floorplan.domain.FloorPlan;
 import eu.uniche.iguide.floorplan.domain.FloorPlanPosition;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
@@ -33,6 +34,10 @@ public record FloorPlanResponse(UUID id, UUID projectId, UUID placeId, UUID asse
 
         public static Position from(FloorPlanPosition p) {
             return new Position(p.getId(), p.getResourceType(), p.getResourceId(), p.getX(), p.getY(), p.getRotation());
+        }
+
+        public static Position from(FloorPlanPositionUseCase.Wanted w) {
+            return new Position(w.id(), w.resourceType(), w.resourceId(), w.x(), w.y(), w.rotation());
         }
     }
 }

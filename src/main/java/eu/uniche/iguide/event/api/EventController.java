@@ -9,7 +9,6 @@ import eu.uniche.iguide.event.application.ListEventsQuery;
 import eu.uniche.iguide.event.application.ReorderEventsUseCase;
 import eu.uniche.iguide.event.application.UpdateEventCommand;
 import eu.uniche.iguide.event.application.UpdateEventUseCase;
-import eu.uniche.iguide.event.domain.EventOccurrence;
 import eu.uniche.iguide.platform.security.CurrentPrincipal;
 import eu.uniche.iguide.platform.web.PageResponse;
 import eu.uniche.iguide.resource.api.ChangeStatusRequest;
@@ -150,17 +149,17 @@ public class EventController {
     public ResponseEntity<EventResponse.Occurrence> addOccurrence(@PathVariable UUID projectId,
                                                                   @PathVariable UUID eventId,
                                                                   @RequestBody EventRequests.Occurrence request) {
-        EventOccurrence created = occurrences.add(projectId, eventId, CurrentPrincipal.require(), request.startsAt(),
-                request.endsAt(), request.status());
+        EventOccurrenceUseCase.WantedOccurrence created = occurrences.add(projectId, eventId,
+                CurrentPrincipal.require(), request.startsAt(), request.endsAt(), request.status());
         return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/events/" + eventId
-                + "/occurrences/" + created.getId())).body(EventResponse.Occurrence.from(created));
+                + "/occurrences/" + created.id())).body(EventResponse.Occurrence.from(eventId, created));
     }
 
     @PutMapping("/events/{eventId}/occurrences/{occurrenceId}")
     public EventResponse.Occurrence updateOccurrence(@PathVariable UUID projectId, @PathVariable UUID eventId,
                                                      @PathVariable UUID occurrenceId,
                                                      @RequestBody EventRequests.Occurrence request) {
-        return EventResponse.Occurrence.from(occurrences.update(projectId, eventId, occurrenceId,
+        return EventResponse.Occurrence.from(eventId, occurrences.update(projectId, eventId, occurrenceId,
                 CurrentPrincipal.require(), request.startsAt(), request.endsAt(), request.status()));
     }
 

@@ -223,13 +223,54 @@ None open. Q-002 and Q-003 were resolved on 2026-10-02 and are kept here for ref
   write would add blocking readiness issues to the Project (`14` §2); issues the Project already had do not block".
 - Assumption taken: as proposed (D-037).
 
+### Q-020 — Where the Project picker reads initialization state
+
+- Kind: spec-change-request
+- Source: `12` §3 Project picker: "per organization, the Projects visible in the Catalogue, with `applicationStatus`,
+  `initializedAt`, the Template applied, and the enabled surfaces" and "shows a Project whose `initializedAt` is null
+  with a 'resume initialization' action"; `12` §7 maps the picker to `GET /organizations/{orgId}/projects` only;
+  `02` §11: "Listing operations touch no local state at all and must be recognizable as such".
+- Conflict: the four fields are local state, which the listing may not read.
+- Proposed: in `12` §7, add `GET /projects/{projectId}` to the Project picker row, and in `12` §3 "the CMS reads
+  `applicationStatus`, `initializedAt`, the Template applied, and the enabled surfaces from `GET /projects/{projectId}`
+  per listed Project, because the listing is a passthrough (`02` §11)". Alternative, if one call is preferred: in
+  `02` §11, "listings touch no local state, except that `GET /organizations/{orgId}/projects` adds the read-only
+  initialization fields of the companion rows of the Projects the Catalogue returned; it writes nothing and grants
+  nothing".
+- Assumption taken: the first (D-040): `GET /projects/{id}` carries them.
+
+### Q-021 — What the Template checksum covers
+
+- Kind: spec-change-request
+- Source: `04` §15: "verifying that known pairs still match by checksum. A changed checksum on a version that has
+  initialized any Project fails startup ... Status changes between `ACTIVE`, `DEPRECATED`, and `RETIRED` are made in
+  the file"; `04` §5: "its behavioral definition should be immutable"; `04` §3 lists `checksum` without its scope.
+- Conflict: a checksum of the whole file would make the status change the same section prescribes fail startup.
+- Proposed: in `04` §15, "`checksum` is the SHA-256 of the canonical JSON (keys sorted, no insignificant whitespace)
+  of the file's `definition`; `status`, `name`, and `description` may change in a released version. A style preset's
+  checksum covers its values."
+- Assumption taken: as proposed (D-040).
+
+### Q-022 — Style preset colors, fonts, and the seeded versions
+
+- Kind: question
+- Source: `04` §9 (a preset sets "the four colors"), §11 (`secondaryColor` at least 3:1 on the background), `09` §19
+  (who owns typography); the CMS mockup `iGuide CMS.html` (presets carry `primary`, `onPrimary`, `background`,
+  `text`, and a named font pair; templates "Outdoor trail v2", "1.4.0"-style versions).
+- Open: the mockup's `onPrimary` (ink on the primary colour, often equal to the background) is not a theme property,
+  and would fail the 3:1 rule as `secondaryColor`; the seeded presets carry their own accent as `secondaryColor`
+  and the CMS derives the ink on primary. Fonts are a closed platform set of the prototype's families (`ThemeFont`),
+  not uploadable. Template versions are integers and the three Templates are v1 as `04` §15 names them. Confirm, or
+  add `onPrimaryColor` to `04` §9 and decide `09` §19.
+- Assumption taken: as described (D-040).
+
 ### Open decisions of `09` that shape the next milestones
 
 | `09` | Shapes or blocks |
 |---|---|
 | §26 RLS roles and cross-Project jobs | M1b (see Q-002), Milestone 12 |
-| §19 typography ownership | Milestone 2 `themeValues`, style presets |
-| §20 region as a data dimension | Milestone 2 seed templates (`multi-region-network`) |
+| §19 typography ownership | Milestone 2 `themeValues`, style presets (font set assumed, Q-022) |
+| §20 region as a data dimension | Milestone 2 seed templates (`multi-region-network` seeded without regions, D-040) |
 | §27 Page component text localization | Milestone 2 initial Pages, Milestone 6 |
 | §2 asset processing (GLB, signed URL lifetime, upload size) | Milestone 3 |
 | §22 map tiles and geocoding | Milestone 5 `runtimeConfiguration` |

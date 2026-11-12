@@ -1,6 +1,7 @@
 package eu.uniche.iguide.event.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -137,17 +138,37 @@ class EventWorkingCopyIntegrationTest extends ContentIntegrationTest {
     }
 
     @Test
-    void anActiveEventsOccurrencesAreNotEditedDirectly() throws Exception {
+    void anActiveEventsOccurrencesGoIntoItsWorkingCopy() throws Exception {
         JsonNode event = activeEventWithTwoOccurrences();
         String occurrences = eventsUrl(PROJECT_A) + "/" + id(event) + "/occurrences";
-        mockMvc.perform(json(post(occurrences), Map.of("startsAt", "2026-12-01T10:00:00Z",
+        String first = event.get("occurrences").get(0).get("id").asText();
+        String second = event.get("occurrences").get(1).get("id").asText();
+        JsonNode added = read(mockMvc.perform(json(post(occurrences), Map.of("startsAt", "2026-12-01T10:00:00Z",
                         "endsAt", "2026-12-01T11:00:00Z")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("SCHEDULED"))
+                .andExpect(jsonPath("$.eventId").value(id(event)))
+                .andReturn());
+        mockMvc.perform(json(put(occurrences + "/{o}", first), Map.of("startsAt", "2026-11-06T18:00:00Z",
+                        "endsAt", "2026-11-06T19:00:00Z", "status", "CANCELLED")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+        // Refused at the occurrence's own fields, as on a DRAFT Event.
+        mockMvc.perform(json(put(occurrences + "/{o}", id(added)), Map.of("startsAt", "2026-12-01T10:00:00Z")))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.errors[0].code").value("RESOURCE_NOT_EDITABLE"));
-        mockMvc.perform(json(put(occurrences + "/{o}", event.get("occurrences").get(0).get("id").asText()),
-                        Map.of("startsAt", "2026-12-01T10:00:00Z", "endsAt", "2026-12-01T11:00:00Z")))
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.errors[0].code").value("RESOURCE_NOT_EDITABLE"));
+                .andExpect(jsonPath("$.errors[0].path").value("endsAt"));
+        mockMvc.perform(authenticated(delete(occurrences + "/{o}", second)))
+                .andExpect(status().isNoContent());
+        mockMvc.perform(authenticated(delete(occurrences + "/{o}", second)))
+                .andExpect(status().isNotFound());
+        assertThat(reload(event).get("occurrences")).hasSize(2);
+
+        applyWorkingCopy(PROJECT_A, "events", id(event), 200);
+        JsonNode live = reload(event);
+        assertThat(live.get("occurrences")).hasSize(2);
+        assertThat(live.get("occurrences").get(0).get("id").asText()).isEqualTo(first);
+        assertThat(live.get("occurrences").get(0).get("status").asText()).isEqualTo("CANCELLED");
+        assertThat(live.get("occurrences").get(1).get("startsAt").asText()).isEqualTo("2026-12-01T10:00:00Z");
     }
 
     // --- Helpers ---------------------------------------------------------------------------------

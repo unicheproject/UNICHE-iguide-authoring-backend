@@ -3,6 +3,7 @@ package eu.uniche.iguide.guide.api;
 import eu.uniche.iguide.asset.application.ResourceAssetUseCase;
 import eu.uniche.iguide.asset.domain.AssetResourceType;
 import eu.uniche.iguide.guide.application.GuideBlockUseCase;
+import eu.uniche.iguide.guide.application.GuideBlockWriter;
 import eu.uniche.iguide.guide.application.GuideRules;
 import eu.uniche.iguide.guide.application.UpdateGuideCommand;
 import eu.uniche.iguide.guide.application.UpdateGuideUseCase;
@@ -41,11 +42,11 @@ public class GuideWorkingCopyHandler implements WorkingCopyHandler<GuideWorkingC
     private final LiveRowLock lock;
     private final GuideRules rules;
     private final UpdateGuideUseCase updateGuide;
-    private final GuideBlockUseCase blocks;
+    private final GuideBlockWriter blocks;
     private final ResourceAssetUseCase media;
 
     public GuideWorkingCopyHandler(LiveRowLock lock, GuideRules rules, UpdateGuideUseCase updateGuide,
-                                   GuideBlockUseCase blocks, ResourceAssetUseCase media) {
+                                   GuideBlockWriter blocks, ResourceAssetUseCase media) {
         this.lock = lock;
         this.rules = rules;
         this.updateGuide = updateGuide;

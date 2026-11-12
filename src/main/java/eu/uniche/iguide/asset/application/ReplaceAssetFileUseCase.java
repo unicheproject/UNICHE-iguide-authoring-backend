@@ -18,7 +18,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Replaces the file of a DRAFT Asset, keeping its id, texts, and bindings (DECISIONS.md D-025). The new file
  * is of the same type, so every role that uses the Asset still accepts it. An ACTIVE Asset keeps its file:
  * visitors would see different bytes without any review. The bytes go to a new key, so signed URLs already
- * handed out keep reading the old file until they expire; the old object is left for cleanup.
+ * handed out keep reading the old file until they expire; the old object is queued for deletion after that, and
+ * the new one is deleted again when the replacement is refused (DECISIONS.md D-043).
  */
 @Service
 public class ReplaceAssetFileUseCase {
@@ -27,14 +28,17 @@ public class ReplaceAssetFileUseCase {
     private final AssetRules rules;
     private final AssetFileWriter writer;
     private final AssetRepository assets;
+    private final PurgeAssetObjectsUseCase purge;
     private final TransactionTemplate transactionTemplate;
 
     public ReplaceAssetFileUseCase(ProjectAccessGateway accessGateway, AssetRules rules, AssetFileWriter writer,
-                                   AssetRepository assets, TransactionTemplate transactionTemplate) {
+                                   AssetRepository assets, PurgeAssetObjectsUseCase purge,
+                                   TransactionTemplate transactionTemplate) {
         this.accessGateway = accessGateway;
         this.rules = rules;
         this.writer = writer;
         this.assets = assets;
+        this.purge = purge;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -53,11 +57,19 @@ public class ReplaceAssetFileUseCase {
         }
         writer.checkSize(file, current.getType());
         Asset.StoredFile stored = writer.write(file, current.getType(), AssetFileWriter.revisionKey(projectId, assetId));
-        return transactionTemplate.execute(status -> {
-            Asset asset = rules.requireAsset(projectId, assetId);
-            ResourceRules.requireCurrentVersion(asset.getVersion(), version, "asset");
-            asset.store(stored, principal.subject(), Instant.now());
-            return rules.view(assets.saveAndFlush(asset));
-        });
+        try {
+            return transactionTemplate.execute(status -> {
+                Asset asset = rules.requireAsset(projectId, assetId);
+                ResourceRules.requireCurrentVersion(asset.getVersion(), version, "asset");
+                ResourceRules.requireDraft(asset.getStatus(), "asset");
+                Instant now = Instant.now();
+                purge.queue(projectId, asset.getStorageKey(), now);
+                asset.store(stored, principal.subject(), now);
+                return rules.view(assets.saveAndFlush(asset));
+            });
+        } catch (RuntimeException e) {
+            writer.discard(stored.key());
+            throw e;
+        }
     }
 }

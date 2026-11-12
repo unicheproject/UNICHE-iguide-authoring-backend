@@ -12,6 +12,7 @@ import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -31,13 +32,16 @@ public class ChangeAssetStatusUseCase {
     private final AssetRules rules;
     private final AssetRepository assets;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public ChangeAssetStatusUseCase(ProjectAccessGateway accessGateway, AssetRules rules, AssetRepository assets,
-                                    TransactionTemplate transactionTemplate) {
+                                    TransactionTemplate transactionTemplate,
+                                    ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.rules = rules;
         this.assets = assets;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public AssetView execute(UUID projectId, UUID assetId, UnichePrincipal principal, ResourceStatus target,
@@ -57,6 +61,7 @@ public class ChangeAssetStatusUseCase {
                     throw new ResourceInUseException("The asset is still used.", references);
                 }
             }
+            contentRevision.afterTransition(projectId, asset.getStatus(), target);
             asset.changeStatus(target, principal.subject(), Instant.now());
             return rules.view(assets.saveAndFlush(asset));
         });

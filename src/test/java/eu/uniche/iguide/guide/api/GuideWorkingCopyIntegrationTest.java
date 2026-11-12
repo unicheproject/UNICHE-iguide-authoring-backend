@@ -1,8 +1,10 @@
 package eu.uniche.iguide.guide.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -148,11 +150,33 @@ class GuideWorkingCopyIntegrationTest extends ContentIntegrationTest {
     }
 
     @Test
-    void blockEndpointsOfAnActiveGuideRefuseAndPointToTheWorkingCopy() throws Exception {
-        mockMvc.perform(json(post(guidesUrl(PROJECT_A) + "/" + id(guide) + "/blocks"),
-                        Map.of("blockType", "TEXT", "translations", Map.of("el", Map.of("text", story(paragraph("x")))))))
+    void blockEndpointsOfAnActiveGuideWriteIntoItsWorkingCopy() throws Exception {
+        String blocks = guidesUrl(PROJECT_A) + "/" + id(guide) + "/blocks";
+        JsonNode added = read(mockMvc.perform(json(post(blocks), Map.of("blockType", "TEXT",
+                        "translations", Map.of("el", Map.of("text", story(paragraph("Επίλογος")))))))
+                .andExpect(status().isCreated()).andReturn());
+        assertThat(added.get("sortOrder").asInt()).isEqualTo(2);
+        mockMvc.perform(json(post(blocks), Map.of("blockType", "REFERENCE", "resourceType", "POI")))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.errors[0].code").value("RESOURCE_NOT_EDITABLE"));
+                .andExpect(jsonPath("$.errors[0].path").value("resourceId"));
+        JsonNode captioned = read(mockMvc.perform(json(put(blocks + "/{b}", id(referenceBlock)),
+                        Map.of("resourceType", "POI", "resourceId", id(poi),
+                                "translations", Map.of("el", Map.of("caption", "Δείτε")))))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(captioned.get("translations").get("en").get("caption").asText()).isEqualTo("Look up");
+        mockMvc.perform(json(put(blocks + ":order"), Map.of("ids", List.of(id(added), id(referenceBlock), id(textBlock)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(id(added)));
+        mockMvc.perform(authenticated(delete(blocks + "/{b}", id(textBlock))))
+                .andExpect(status().isNoContent());
+        assertThat(blockIds(reload(guide))).containsExactly(id(textBlock), id(referenceBlock));
+
+        applyWorkingCopy(PROJECT_A, "guides", id(guide), 200);
+        JsonNode live = reload(guide);
+        assertThat(live.get("blocks")).hasSize(2);
+        assertThat(live.get("blocks").get(0).get("blockType").asText()).isEqualTo("TEXT");
+        assertThat(live.get("blocks").get(1).get("id").asText()).isEqualTo(id(referenceBlock));
+        assertThat(live.get("blocks").get(1).get("translations").get("el").get("caption").asText()).isEqualTo("Δείτε");
     }
 
     // --- Helpers ---------------------------------------------------------------------------------

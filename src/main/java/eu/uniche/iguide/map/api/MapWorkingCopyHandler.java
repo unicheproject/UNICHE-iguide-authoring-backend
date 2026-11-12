@@ -2,6 +2,7 @@ package eu.uniche.iguide.map.api;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import eu.uniche.iguide.map.application.MapPlacementUseCase;
+import eu.uniche.iguide.map.application.MapPlacementWriter;
 import eu.uniche.iguide.map.application.MapRules;
 import eu.uniche.iguide.map.application.UpdateMapUseCase;
 import eu.uniche.iguide.map.domain.GeographicMap;
@@ -41,15 +42,15 @@ public class MapWorkingCopyHandler implements WorkingCopyHandler<MapWorkingCopyH
     private final LiveRowLock lock;
     private final MapRules rules;
     private final UpdateMapUseCase updateMap;
-    private final MapPlacementUseCase placementUseCase;
+    private final MapPlacementWriter placementWriter;
     private final GeographicMapResourceRepository placements;
 
     public MapWorkingCopyHandler(LiveRowLock lock, MapRules rules, UpdateMapUseCase updateMap,
-                                 MapPlacementUseCase placementUseCase, GeographicMapResourceRepository placements) {
+                                 MapPlacementWriter placementWriter, GeographicMapResourceRepository placements) {
         this.lock = lock;
         this.rules = rules;
         this.updateMap = updateMap;
-        this.placementUseCase = placementUseCase;
+        this.placementWriter = placementWriter;
         this.placements = placements;
     }
 
@@ -77,7 +78,7 @@ public class MapWorkingCopyHandler implements WorkingCopyHandler<MapWorkingCopyH
                 state.maxLatitude(), state.maxLongitude());
         updateMap.write(projectId, rules.requireMap(projectId, resourceId), principal, view, state.visibility(),
                 state.visitorFilterEnabled());
-        placementUseCase.replacePlacements(projectId, resourceId, state.placements());
+        placementWriter.replacePlacements(projectId, resourceId, state.placements());
     }
 
     @Override

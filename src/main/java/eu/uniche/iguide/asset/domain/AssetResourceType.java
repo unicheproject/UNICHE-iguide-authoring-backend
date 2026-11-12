@@ -2,10 +2,11 @@ package eu.uniche.iguide.asset.domain;
 
 /**
  * The Resource kinds that bind Assets through {@code .../{kind}/{id}/resource-assets} (DECISIONS.md D-025).
- * Places, maps, and Floor Plans have no media bindings; a Floor Plan names its image directly.
+ * Places joined on owner request (D-041); maps and Floor Plans have no media bindings, a Floor Plan names its
+ * image directly.
  */
 public enum AssetResourceType {
-    POI("point of interest"), ROUTE("route"), GUIDE("guide"), EVENT("event");
+    PLACE("place"), POI("point of interest"), ROUTE("route"), GUIDE("guide"), EVENT("event");
 
     private final String label;
 

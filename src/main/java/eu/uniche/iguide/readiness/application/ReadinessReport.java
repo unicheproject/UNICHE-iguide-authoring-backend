@@ -16,7 +16,7 @@ import java.util.UUID;
 public class ReadinessReport {
 
     private static final List<String> TYPE_ORDER = List.of("PROJECT", "PLACE", "POI", "ROUTE", "GUIDE", "EVENT",
-            "CATEGORY", "MAP", "FLOOR_PLAN", "ASSET");
+            "CATEGORY", "MAP", "FLOOR_PLAN", "ASSET", "NAVIGATION");
 
     private final List<ReadinessIssue> blocking = new ArrayList<>();
     private final List<ReadinessIssue> warnings = new ArrayList<>();

@@ -23,13 +23,16 @@ public class UpdateProjectUseCase {
     private final ProjectAccessGateway accessGateway;
     private final CatalogueClient catalogueClient;
     private final ProjectCompanionSyncService companionSync;
+    private final ProjectInitializationReader initializationReader;
 
     public UpdateProjectUseCase(ProjectAccessGateway accessGateway,
                                 CatalogueClient catalogueClient,
-                                ProjectCompanionSyncService companionSync) {
+                                ProjectCompanionSyncService companionSync,
+                                ProjectInitializationReader initializationReader) {
         this.accessGateway = accessGateway;
         this.catalogueClient = catalogueClient;
         this.companionSync = companionSync;
+        this.initializationReader = initializationReader;
     }
 
     public ProjectView execute(UUID projectId, UnichePrincipal principal, String name,
@@ -51,6 +54,6 @@ public class UpdateProjectUseCase {
         Project companion = localDescription == null
                 ? companionSync.get(projectId)
                 : companionSync.setLocalDescription(projectId, localDescription);
-        return ProjectView.ofCompanion(companion);
+        return ProjectView.ofCompanion(companion).withInitialization(initializationReader.read(projectId));
     }
 }

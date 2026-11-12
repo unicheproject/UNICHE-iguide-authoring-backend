@@ -8,6 +8,7 @@ import eu.uniche.iguide.platform.web.ErrorItem;
 import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
 import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
@@ -29,15 +30,18 @@ public class ChangeFloorPlanStatusUseCase {
     private final FloorPlanRepository plans;
     private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public ChangeFloorPlanStatusUseCase(ProjectAccessGateway accessGateway, FloorPlanRules rules,
                                         FloorPlanRepository plans, WorkingCopyStore workingCopies,
-                                        TransactionTemplate transactionTemplate) {
+                                        TransactionTemplate transactionTemplate,
+                                        ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.rules = rules;
         this.plans = plans;
         this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public FloorPlan execute(UUID projectId, UUID planId, UnichePrincipal principal, ResourceStatus target,
@@ -54,6 +58,7 @@ public class ChangeFloorPlanStatusUseCase {
             if (target != ResourceStatus.ACTIVE) {
                 workingCopies.dropFor(projectId, WorkingCopyResourceType.FLOOR_PLAN, planId);
             }
+            contentRevision.afterTransition(projectId, plan.getStatus(), target);
             plan.changeStatus(target, principal.subject(), Instant.now());
             return plans.saveAndFlush(plan);
         });

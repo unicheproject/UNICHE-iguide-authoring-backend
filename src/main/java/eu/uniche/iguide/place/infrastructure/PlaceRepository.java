@@ -2,6 +2,7 @@ package eu.uniche.iguide.place.infrastructure;
 
 import eu.uniche.iguide.place.domain.Place;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,6 +18,8 @@ public interface PlaceRepository extends JpaRepository<Place, UUID>, JpaSpecific
     Optional<Place> findByProjectIdAndId(UUID projectId, UUID id);
 
     List<Place> findByProjectId(UUID projectId);
+
+    List<Place> findByProjectIdAndIdIn(UUID projectId, Collection<UUID> ids);
 
     boolean existsByProjectIdAndSlug(UUID projectId, String slug);
 

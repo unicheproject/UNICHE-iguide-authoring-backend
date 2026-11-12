@@ -130,7 +130,7 @@ public class FloorPlanController {
         var created = positions.position(projectId, planId, CurrentPrincipal.require(), request.resourceType(),
                 request.resourceId(), request.x(), request.y(), request.rotation());
         return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/floor-plans/" + planId
-                + "/positions/" + created.getId())).body(FloorPlanResponse.Position.from(created));
+                + "/positions/" + created.id())).body(FloorPlanResponse.Position.from(created));
     }
 
     @PutMapping("/floor-plans/{planId}/positions/{positionId}")

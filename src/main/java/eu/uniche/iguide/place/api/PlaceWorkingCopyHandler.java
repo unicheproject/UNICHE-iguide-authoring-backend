@@ -1,5 +1,7 @@
 package eu.uniche.iguide.place.api;
 
+import eu.uniche.iguide.asset.application.ResourceAssetUseCase;
+import eu.uniche.iguide.asset.domain.AssetResourceType;
 import eu.uniche.iguide.place.application.PlaceRules;
 import eu.uniche.iguide.place.application.PlaceTranslationInput;
 import eu.uniche.iguide.place.application.UpdatePlaceCommand;
@@ -15,27 +17,34 @@ import eu.uniche.iguide.workingcopy.application.WorkingCopyHandler;
 import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/** The working copy of an ACTIVE Place: the Place's update body without {@code version} (DECISIONS.md D-027). */
+/**
+ * The working copy of an ACTIVE Place: the Place's update body without {@code version} (DECISIONS.md D-027) and its
+ * media in order ({@code media}, INLINE excluded; D-041).
+ */
 @Component
 public class PlaceWorkingCopyHandler implements WorkingCopyHandler<PlaceWorkingCopyHandler.State> {
 
     public record State(String slug, PlaceType type, PlaceEnvironment environment, UUID parentPlaceId,
                         String internalName, BigDecimal latitude, BigDecimal longitude, boolean featured,
-                        Map<String, PlaceTranslationBody> translations) {
+                        Map<String, PlaceTranslationBody> translations, List<ResourceAssetUseCase.Media> media) {
     }
 
     private final LiveRowLock lock;
     private final PlaceRules rules;
     private final UpdatePlaceUseCase updatePlace;
+    private final ResourceAssetUseCase media;
 
-    public PlaceWorkingCopyHandler(LiveRowLock lock, PlaceRules rules, UpdatePlaceUseCase updatePlace) {
+    public PlaceWorkingCopyHandler(LiveRowLock lock, PlaceRules rules, UpdatePlaceUseCase updatePlace,
+                                   ResourceAssetUseCase media) {
         this.lock = lock;
         this.rules = rules;
         this.updatePlace = updatePlace;
+        this.media = media;
     }
 
     @Override
@@ -61,6 +70,7 @@ public class PlaceWorkingCopyHandler implements WorkingCopyHandler<PlaceWorkingC
         updatePlace.write(projectId, rules.requirePlace(projectId, resourceId), principal, new UpdatePlaceCommand(
                 null, state.slug(), state.type(), state.environment(), state.parentPlaceId(), state.internalName(),
                 state.latitude(), state.longitude(), state.featured(), translations));
+        media.replace(projectId, AssetResourceType.PLACE, resourceId, state.media());
     }
 
     @Override

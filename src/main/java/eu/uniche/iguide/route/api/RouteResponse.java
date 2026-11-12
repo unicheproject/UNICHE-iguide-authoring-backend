@@ -2,6 +2,7 @@ package eu.uniche.iguide.route.api;
 
 import eu.uniche.iguide.asset.api.AssetResponse;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.route.application.RouteStopUseCase;
 import eu.uniche.iguide.route.application.RouteView;
 import eu.uniche.iguide.route.application.StopView;
 import eu.uniche.iguide.route.domain.Route;
@@ -40,6 +41,13 @@ public record RouteResponse(UUID id, UUID projectId, String slug, ResourceStatus
                     .collect(Collectors.toMap(RouteStopTranslation::getLanguageCode, StopTranslationBody::from,
                             (a, b) -> a, TreeMap::new));
             return new Stop(view.stop().getId(), view.stop().getPoiId(), view.stop().getPosition(), texts);
+        }
+
+        public static Stop from(RouteStopUseCase.StopData data) {
+            Map<String, StopTranslationBody> texts = new TreeMap<>();
+            data.translations().forEach((code, t) -> texts.put(code, new StopTranslationBody(t.titleOverride(),
+                    t.description(), t.navigationInstructions(), t.narrative())));
+            return new Stop(data.id(), data.poiId(), data.position(), texts);
         }
     }
 

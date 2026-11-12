@@ -6,6 +6,7 @@ import eu.uniche.iguide.platform.web.ErrorItem;
 import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import eu.uniche.iguide.trigger.domain.InteractionTrigger;
 import eu.uniche.iguide.surface.domain.Surface;
 import eu.uniche.iguide.trigger.domain.TriggerTargetType;
@@ -30,13 +31,16 @@ public class TriggerUseCase {
     private final TriggerRules rules;
     private final InteractionTriggerRepository triggers;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public TriggerUseCase(ProjectAccessGateway accessGateway, TriggerRules rules, InteractionTriggerRepository triggers,
-                          TransactionTemplate transactionTemplate) {
+                          TransactionTemplate transactionTemplate,
+                          ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.rules = rules;
         this.triggers = triggers;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public InteractionTrigger create(UUID projectId, UnichePrincipal principal, TriggerTargetType targetType, UUID targetId,
@@ -69,6 +73,9 @@ public class TriggerUseCase {
             InteractionTrigger.Settings settings = rules.normalize(projectId, trigger.getTriggerType(), code, surfaces,
                     configuration, triggerId, errors);
             ResourceRules.throwIfAny(errors, "The trigger is invalid.");
+            if (trigger.getStatus() == ResourceStatus.ACTIVE) {
+                contentRevision.increment(projectId); // edited in place, visitors meet the change at once
+            }
             trigger.edit(settings, principal.subject(), Instant.now());
             return triggers.saveAndFlush(trigger);
         });
@@ -87,6 +94,7 @@ public class TriggerUseCase {
                 rules.checkTarget(projectId, trigger.getTargetResourceType(), trigger.getTargetResourceId(), errors);
                 ResourceRules.throwIfAny(errors, "The trigger's target is not available.");
             }
+            contentRevision.afterTransition(projectId, trigger.getStatus(), target);
             trigger.changeStatus(target, principal.subject(), Instant.now());
             return triggers.saveAndFlush(trigger);
         });

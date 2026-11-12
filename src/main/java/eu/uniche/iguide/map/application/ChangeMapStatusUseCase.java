@@ -6,6 +6,7 @@ import eu.uniche.iguide.platform.projectaccess.ProjectAccessGateway;
 import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
 import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
@@ -26,14 +27,17 @@ public class ChangeMapStatusUseCase {
     private final GeographicMapRepository maps;
     private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public ChangeMapStatusUseCase(ProjectAccessGateway accessGateway, MapRules rules, GeographicMapRepository maps,
-                                  WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate) {
+                                  WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate,
+                                  ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.rules = rules;
         this.maps = maps;
         this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public GeographicMap execute(UUID projectId, UUID mapId, UnichePrincipal principal, ResourceStatus target,
@@ -46,6 +50,7 @@ public class ChangeMapStatusUseCase {
             if (target != ResourceStatus.ACTIVE) {
                 workingCopies.dropFor(projectId, WorkingCopyResourceType.GEOGRAPHIC_MAP, mapId);
             }
+            contentRevision.afterTransition(projectId, map.getStatus(), target);
             map.changeStatus(target, principal.subject(), Instant.now());
             return maps.saveAndFlush(map);
         });

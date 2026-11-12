@@ -11,6 +11,7 @@ import eu.uniche.iguide.poi.infrastructure.PointOfInterestRepository;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
 import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
@@ -33,16 +34,19 @@ public class ChangePoiStatusUseCase {
     private final PointOfInterestRepository pois;
     private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public ChangePoiStatusUseCase(ProjectAccessGateway accessGateway, ProjectLanguageLookup languages, PoiRules rules,
                                   PointOfInterestRepository pois, WorkingCopyStore workingCopies,
-                                  TransactionTemplate transactionTemplate) {
+                                  TransactionTemplate transactionTemplate,
+                                  ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.languages = languages;
         this.rules = rules;
         this.pois = pois;
         this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public PoiView execute(UUID projectId, UUID poiId, UnichePrincipal principal, ResourceStatus target, Long version) {
@@ -71,6 +75,7 @@ public class ChangePoiStatusUseCase {
             if (target != ResourceStatus.ACTIVE) {
                 workingCopies.dropFor(projectId, WorkingCopyResourceType.POI, poiId);
             }
+            contentRevision.afterTransition(projectId, poi.getStatus(), target);
             poi.changeStatus(target, principal.subject(), Instant.now());
             return rules.view(pois.saveAndFlush(poi));
         });

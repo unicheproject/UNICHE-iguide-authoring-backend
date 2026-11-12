@@ -16,6 +16,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
@@ -82,6 +83,11 @@ public class S3AssetStorage implements AssetStorage, DisposableBean {
     public void store(String key, InputStream data, long sizeBytes, String contentType) {
         client.putObject(PutObjectRequest.builder().bucket(bucket).key(key).contentType(contentType)
                 .contentLength(sizeBytes).build(), RequestBody.fromInputStream(data, sizeBytes));
+    }
+
+    @Override
+    public void delete(String key) {
+        client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(key).build());
     }
 
     @Override

@@ -1,6 +1,5 @@
 package eu.uniche.iguide.guide.api;
 
-import eu.uniche.iguide.guide.application.BlockView;
 import eu.uniche.iguide.guide.application.ChangeGuideStatusUseCase;
 import eu.uniche.iguide.guide.application.CreateGuideUseCase;
 import eu.uniche.iguide.guide.application.GetGuideQuery;
@@ -136,10 +135,10 @@ public class GuideController {
     @PostMapping("/guides/{guideId}/blocks")
     public ResponseEntity<GuideResponse.Block> addBlock(@PathVariable UUID projectId, @PathVariable UUID guideId,
                                                         @RequestBody GuideRequests.Block request) {
-        BlockView created = blocks.add(projectId, guideId, CurrentPrincipal.require(), request.blockType(),
-                request.resourceType(), request.resourceId(), request.translationInputs());
+        GuideBlockUseCase.BlockData created = blocks.add(projectId, guideId, CurrentPrincipal.require(),
+                request.blockType(), request.resourceType(), request.resourceId(), request.translationInputs());
         return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/guides/" + guideId + "/blocks/"
-                + created.block().getId())).body(GuideResponse.Block.from(created));
+                + created.id())).body(GuideResponse.Block.from(created));
     }
 
     @PutMapping("/guides/{guideId}/blocks/{blockId}")

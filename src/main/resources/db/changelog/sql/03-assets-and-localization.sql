@@ -124,3 +124,38 @@ CREATE UNIQUE INDEX uq_resource_assets_inline ON resource_assets (project_id, re
 COMMENT ON COLUMN resource_assets.language_code IS
     'Null applies to every language; otherwise the binding is for visitors of that language (03 section 4).';
 --rollback DROP TABLE resource_assets;
+
+--changeset iguide:0042-project-theme-asset-foreign-keys
+--comment A theme's logos, favicon, and splash are Assets of the same Project (04 section 11); project_themes is in group 2
+ALTER TABLE project_themes
+    ADD CONSTRAINT fk_project_themes_logo FOREIGN KEY (project_id, logo_asset_id) REFERENCES assets (project_id, id),
+    ADD CONSTRAINT fk_project_themes_compact_logo FOREIGN KEY (project_id, compact_logo_asset_id)
+        REFERENCES assets (project_id, id),
+    ADD CONSTRAINT fk_project_themes_favicon FOREIGN KEY (project_id, favicon_asset_id)
+        REFERENCES assets (project_id, id),
+    ADD CONSTRAINT fk_project_themes_splash FOREIGN KEY (project_id, splash_asset_id)
+        REFERENCES assets (project_id, id);
+--rollback ALTER TABLE project_themes DROP CONSTRAINT fk_project_themes_logo, DROP CONSTRAINT fk_project_themes_compact_logo, DROP CONSTRAINT fk_project_themes_favicon, DROP CONSTRAINT fk_project_themes_splash;
+
+--changeset iguide:0043-resource-assets-for-places
+--comment Places bind media too, a primary image and a gallery (owner request 2026-11-04, DECISIONS.md D-041)
+ALTER TABLE resource_assets DROP CONSTRAINT ck_resource_assets_resource_type;
+ALTER TABLE resource_assets ADD CONSTRAINT ck_resource_assets_resource_type
+    CHECK (resource_type IN ('PLACE', 'POI', 'ROUTE', 'GUIDE', 'EVENT'));
+--rollback ALTER TABLE resource_assets DROP CONSTRAINT ck_resource_assets_resource_type; ALTER TABLE resource_assets ADD CONSTRAINT ck_resource_assets_resource_type CHECK (resource_type IN ('POI', 'ROUTE', 'GUIDE', 'EVENT'));
+
+--changeset iguide:0044-create-asset-storage-cleanups
+--comment Stored objects no Asset points at any more, deleted once signed URLs to them have expired (04 section 10 cleanup strategy, DECISIONS.md D-043)
+CREATE TABLE asset_storage_cleanups (
+    id           uuid        NOT NULL,
+    project_id   uuid        NOT NULL,
+    storage_key  text        NOT NULL,
+    delete_after timestamptz NOT NULL,
+    created_at   timestamptz NOT NULL,
+    CONSTRAINT pk_asset_storage_cleanups PRIMARY KEY (id),
+    CONSTRAINT fk_asset_storage_cleanups_project FOREIGN KEY (project_id) REFERENCES projects (id),
+    CONSTRAINT uq_asset_storage_cleanups_key UNIQUE (storage_key)
+);
+
+CREATE INDEX idx_asset_storage_cleanups_due ON asset_storage_cleanups (delete_after);
+--rollback DROP TABLE asset_storage_cleanups;

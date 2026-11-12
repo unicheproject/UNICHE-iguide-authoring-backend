@@ -3,6 +3,7 @@ package eu.uniche.iguide.event.api;
 import eu.uniche.iguide.asset.application.ResourceAssetUseCase;
 import eu.uniche.iguide.asset.domain.AssetResourceType;
 import eu.uniche.iguide.event.application.EventOccurrenceUseCase;
+import eu.uniche.iguide.event.application.EventOccurrenceWriter;
 import eu.uniche.iguide.event.application.EventRules;
 import eu.uniche.iguide.event.application.UpdateEventCommand;
 import eu.uniche.iguide.event.application.UpdateEventUseCase;
@@ -35,11 +36,11 @@ public class EventWorkingCopyHandler implements WorkingCopyHandler<EventWorkingC
     private final LiveRowLock lock;
     private final EventRules rules;
     private final UpdateEventUseCase updateEvent;
-    private final EventOccurrenceUseCase occurrences;
+    private final EventOccurrenceWriter occurrences;
     private final ResourceAssetUseCase resourceAssets;
 
     public EventWorkingCopyHandler(LiveRowLock lock, EventRules rules, UpdateEventUseCase updateEvent,
-                                   EventOccurrenceUseCase occurrences, ResourceAssetUseCase resourceAssets) {
+                                   EventOccurrenceWriter occurrences, ResourceAssetUseCase resourceAssets) {
         this.lock = lock;
         this.rules = rules;
         this.updateEvent = updateEvent;

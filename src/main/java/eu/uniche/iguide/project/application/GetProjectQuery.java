@@ -18,10 +18,13 @@ public class GetProjectQuery {
 
     private final ProjectAccessGateway accessGateway;
     private final ProjectRepository projectRepository;
+    private final ProjectInitializationReader initializationReader;
 
-    public GetProjectQuery(ProjectAccessGateway accessGateway, ProjectRepository projectRepository) {
+    public GetProjectQuery(ProjectAccessGateway accessGateway, ProjectRepository projectRepository,
+                           ProjectInitializationReader initializationReader) {
         this.accessGateway = accessGateway;
         this.projectRepository = projectRepository;
+        this.initializationReader = initializationReader;
     }
 
     // Deliberately not transactional. The access check inside writes the companion row through its own
@@ -30,9 +33,11 @@ public class GetProjectQuery {
         AccessibleProject project = accessGateway.requireAccessibleProject(projectId, principal);
         // The companion row exists by now: the access check upserted it. Locally owned fields are read
         // from it, never from the Catalogue.
-        return projectRepository.findById(project.id())
+        ProjectView view = projectRepository.findById(project.id())
                 .map(companion -> ProjectView.of(project, companion.getLocalDescription(),
                         companion.getInitializedAt() != null))
                 .orElseGet(() -> ProjectView.of(project, null, false));
+        // What initialization chose, so the picker can offer "resume initialization" (12 section 3, D-040).
+        return view.withInitialization(initializationReader.read(project.id()));
     }
 }

@@ -10,6 +10,7 @@ import eu.uniche.iguide.platform.web.ErrorItem;
 import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -35,14 +36,17 @@ public class UpdateAssetUseCase {
     private final AssetRepository assets;
     private final AssetTranslationRepository translations;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public UpdateAssetUseCase(ProjectAccessGateway accessGateway, AssetRules rules, AssetRepository assets,
-                              AssetTranslationRepository translations, TransactionTemplate transactionTemplate) {
+                              AssetTranslationRepository translations, TransactionTemplate transactionTemplate,
+                              ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.rules = rules;
         this.assets = assets;
         this.translations = translations;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     /**
@@ -99,6 +103,7 @@ public class UpdateAssetUseCase {
             if (asset.getStatus() == ResourceStatus.ACTIVE) {
                 ChangeAssetStatusUseCase.requireAlternativeText(asset.getType(), decorative,
                         rules.defaultLanguage(projectId), existing.values());
+                contentRevision.increment(projectId); // edited in place, visitors meet the change at once
             }
             translations.saveAll(toSave);
             asset.edit(name, decorative, principal.subject(), Instant.now());

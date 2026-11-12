@@ -18,8 +18,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Stores one uploaded file as a DRAFT Asset ({@code 07} section 10): the type follows the file, the
  * per-type limit is enforced, the checksum and image dimensions are recorded, and the bytes go to object
- * storage before the metadata row is written. If that write then fails, the object is left behind without
- * metadata; nothing references it and a later cleanup can remove it.
+ * storage before the metadata row is written. If that write then fails, the object is deleted again
+ * (DECISIONS.md D-043).
  */
 @Service
 public class UploadAssetUseCase {
@@ -71,7 +71,12 @@ public class UploadAssetUseCase {
         Asset.StoredFile stored = writer.write(file, type, AssetFileWriter.originalKey(projectId, id));
         AssetType finalType = type;
         String internalName = name != null ? name : stored.originalFilename();
-        return transactionTemplate.execute(status -> rules.view(assets.saveAndFlush(Asset.draft(id, projectId,
-                finalType, internalName, stored, principal.subject(), Instant.now()))));
+        try {
+            return transactionTemplate.execute(status -> rules.view(assets.saveAndFlush(Asset.draft(id, projectId,
+                    finalType, internalName, stored, principal.subject(), Instant.now()))));
+        } catch (RuntimeException e) {
+            writer.discard(stored.key());
+            throw e;
+        }
     }
 }

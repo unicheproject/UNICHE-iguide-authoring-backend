@@ -38,6 +38,37 @@ public final class ErrorPaths {
         });
     }
 
+    /**
+     * The reverse of {@link #within}: errors under {@code prefix} are reported relative to it, as the child's own
+     * endpoint names them ({@code stops[2].poiId} becomes {@code poiId}); other errors are left as they are.
+     */
+    public static <T> T outside(String prefix, Supplier<T> action) {
+        try {
+            return action.get();
+        } catch (ValidationFailedException e) {
+            if (e.errors().stream().noneMatch(error -> under(prefix, error.path()))) {
+                throw e;
+            }
+            throw new ValidationFailedException(e.getMessage(), e.errors().stream()
+                    .map(error -> new ErrorItem(strip(prefix, error.path()), error.code(), error.message()))
+                    .toList());
+        } catch (DuplicateValueException e) {
+            String path = e.errors().isEmpty() ? null : e.errors().getFirst().path();
+            if (!under(prefix, path)) {
+                throw e;
+            }
+            throw new DuplicateValueException(strip(prefix, path), e.getMessage());
+        }
+    }
+
+    private static boolean under(String prefix, String path) {
+        return path != null && path.startsWith(prefix + ".");
+    }
+
+    private static String strip(String prefix, String path) {
+        return under(prefix, path) ? path.substring(prefix.length() + 1) : path;
+    }
+
     private static String join(String prefix, String path) {
         return path == null || path.isEmpty() ? prefix : prefix + "." + path;
     }

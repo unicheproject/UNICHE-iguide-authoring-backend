@@ -1,5 +1,6 @@
 package eu.uniche.iguide.map.api;
 
+import eu.uniche.iguide.map.application.MapPlacementUseCase;
 import eu.uniche.iguide.map.domain.GeographicMap;
 import eu.uniche.iguide.map.domain.GeographicMapResource;
 import eu.uniche.iguide.map.domain.MapVisibility;
@@ -36,6 +37,10 @@ public record MapResponse(UUID id, UUID projectId, UUID placeId, ResourceStatus 
 
         public static Placement from(GeographicMapResource r) {
             return new Placement(r.getId(), r.getResourceType(), r.getResourceId(), r.getLatitude(), r.getLongitude());
+        }
+
+        public static Placement from(MapPlacementUseCase.Wanted w) {
+            return new Placement(w.id(), w.resourceType(), w.resourceId(), w.latitude(), w.longitude());
         }
     }
 }

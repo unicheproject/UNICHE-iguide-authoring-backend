@@ -23,13 +23,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * The media of a Resource ({@code 07} section 14, {@code .../{kind}/{id}/resource-assets}), for
- * {@code pois}, {@code routes}, {@code guides}, and {@code events} (DECISIONS.md D-025).
+ * {@code places}, {@code pois}, {@code routes}, {@code guides}, and {@code events} (DECISIONS.md D-025, D-041).
  */
 @RestController
 @RequestMapping("/api/v1/projects/{projectId}/{kind}/{resourceId}")
 public class ResourceAssetController {
 
-    private static final Map<String, AssetResourceType> KINDS = Map.of("pois", AssetResourceType.POI,
+    private static final Map<String, AssetResourceType> KINDS = Map.of("places", AssetResourceType.PLACE, "pois", AssetResourceType.POI,
             "routes", AssetResourceType.ROUTE, "guides", AssetResourceType.GUIDE, "events", AssetResourceType.EVENT);
 
     private final ResourceAssetUseCase bindings;

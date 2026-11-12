@@ -5,6 +5,7 @@ import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.platform.web.ResourceNotFoundException;
 import eu.uniche.iguide.platform.web.VersionConflictException;
 import eu.uniche.iguide.readiness.application.ReadinessIssue;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import eu.uniche.iguide.workingcopy.domain.ResourceWorkingCopy;
 import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import eu.uniche.iguide.workingcopy.infrastructure.ResourceWorkingCopyRepository;
@@ -22,8 +23,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * translations (DECISIONS.md D-035). The write is refused with {@code 422}, and rolled back, when it would add
  * blocking readiness issues to the Project ({@code 14} section 2, {@link ApplyReadinessGate}, DECISIONS.md D-037).
  *
- * <p>Not yet: the {@code contentRevision} increment (no Project settings, GAPS.md G-024) and the
- * {@code RESOURCE_CHANGES_APPLIED} Audit Event (Milestone 7, GAPS.md G-023); see GAPS.md G-034.
+ * Apply raises {@code contentRevision} ({@link ContentRevision}).
+ *
+ * <p>Not yet: the {@code RESOURCE_CHANGES_APPLIED} Audit Event (Milestone 7, GAPS.md G-023); see GAPS.md G-034.
  */
 @Service
 public class ApplyWorkingCopyUseCase {
@@ -35,11 +37,13 @@ public class ApplyWorkingCopyUseCase {
     private final ApplyReadinessGate readinessGate;
     private final EntityManager entityManager;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public ApplyWorkingCopyUseCase(ProjectAccessGateway accessGateway, WorkingCopyHandlers handlers,
                                    ResourceWorkingCopyRepository copies, List<WorkingCopyApplyHook> hooks,
                                    ApplyReadinessGate readinessGate, EntityManager entityManager,
-                                   TransactionTemplate transactionTemplate) {
+                                   TransactionTemplate transactionTemplate,
+                                   ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.handlers = handlers;
         this.copies = copies;
@@ -47,6 +51,7 @@ public class ApplyWorkingCopyUseCase {
         this.readinessGate = readinessGate;
         this.entityManager = entityManager;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public Object execute(UUID projectId, WorkingCopyResourceType type, UUID resourceId, UnichePrincipal principal) {
@@ -67,6 +72,7 @@ public class ApplyWorkingCopyUseCase {
             hooks.forEach(hook -> hook.applied(projectId, type, resourceId));
             copies.delete(copy);
             copies.flush();
+            contentRevision.increment(projectId);
             // The evaluation reads through repositories and plain SQL: both must see the rows as written.
             entityManager.flush();
             entityManager.clear();

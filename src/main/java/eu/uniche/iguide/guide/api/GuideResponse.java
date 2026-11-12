@@ -2,6 +2,7 @@ package eu.uniche.iguide.guide.api;
 
 import eu.uniche.iguide.asset.api.AssetResponse;
 import eu.uniche.iguide.guide.application.BlockView;
+import eu.uniche.iguide.guide.application.GuideBlockUseCase;
 import eu.uniche.iguide.guide.application.GuideView;
 import eu.uniche.iguide.guide.domain.Guide;
 import eu.uniche.iguide.guide.domain.GuideBlockTranslation;
@@ -37,6 +38,14 @@ public record GuideResponse(UUID id, UUID projectId, String slug, ResourceStatus
                             (a, b) -> a, TreeMap::new));
             var b = view.block();
             return new Block(b.getId(), b.getBlockType(), b.getResourceType(), b.getResourceId(), b.getSortOrder(), texts);
+        }
+
+        public static Block from(GuideBlockUseCase.BlockData data) {
+            Map<String, GuideRequests.BlockTranslationBody> texts = new TreeMap<>();
+            data.translations().forEach((code, t) -> texts.put(code,
+                    new GuideRequests.BlockTranslationBody(t.text(), t.caption())));
+            return new Block(data.id(), data.blockType(), data.resourceType(), data.resourceId(), data.sortOrder(),
+                    texts);
         }
     }
 

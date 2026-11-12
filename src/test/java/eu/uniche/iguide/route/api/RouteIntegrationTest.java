@@ -123,15 +123,47 @@ class RouteIntegrationTest extends ContentIntegrationTest {
     }
 
     @Test
-    void anActiveRouteAndItsStopsAreNotEditedInPlace() throws Exception {
+    void anActiveRouteChangesItsStopsThroughItsWorkingCopy() throws Exception {
         JsonNode route = createRoute(PROJECT_A, "Highlights", "INDOOR");
         JsonNode kouros = activePoi("Kouros");
-        addStop(route, kouros, Map.of(), 201);
+        JsonNode first = addStop(route, kouros, Map.of("el", Map.of("narrative", "Ξεκινάμε εδώ")), 201);
         JsonNode active = changeStatus(routesUrl(PROJECT_A), route.get("id").asText(), "ACTIVE",
                 reload(route).get("version").asLong(), 200);
+        // The Route's own fields still change only through a whole working copy.
         assertThat(update(active, Map.of(), 422).get("errors").get(0).get("code").asText()).isEqualTo("RESOURCE_NOT_EDITABLE");
-        assertThat(addStop(active, createPoi(PROJECT_A, "{\"title\": \"Kore\"}"), Map.of(), 422)
-                .get("errors").get(0).get("code").asText()).isEqualTo("RESOURCE_NOT_EDITABLE");
+
+        // The same Point of Interest twice in a row is refused at the stop's own field, as on a DRAFT Route.
+        JsonNode twice = addStop(active, kouros, Map.of(), 422);
+        assertThat(twice.get("errors").get(0).get("code").asText()).isEqualTo("DUPLICATE_STOP");
+        assertThat(twice.get("errors").get(0).get("path").asText()).isEqualTo("poiId");
+
+        JsonNode kore = activePoi("Kore");
+        JsonNode added = addStop(active, kore, Map.of("en", Map.of("narrative", "Next")), 201);
+        assertThat(added.get("position").asInt()).isEqualTo(1);
+        assertThat(added.get("translations").get("en").get("narrative").asText()).isEqualTo("Next");
+        JsonNode edited = read(mockMvc.perform(json(put(stopsUrl(active) + "/{stopId}", first.get("id").asText()),
+                        Map.of("poiId", kouros.get("id").asText(), "translations", Map.of("en", Map.of("narrative", "Start")))))
+                .andExpect(status().isOk()).andReturn());
+        // Languages not sent keep their texts.
+        assertThat(edited.get("translations").get("el").get("narrative").asText()).isEqualTo("Ξεκινάμε εδώ");
+        JsonNode order = read(mockMvc.perform(json(put(stopsUrl(active).replace("/stops", "/stops:order")),
+                        Map.of("ids", List.of(added.get("id").asText(), first.get("id").asText()))))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(order.get(0).get("poiId").asText()).isEqualTo(kore.get("id").asText());
+        assertThat(reload(active).get("stops")).hasSize(1);
+
+        applyWorkingCopy(PROJECT_A, "routes", active.get("id").asText(), 200);
+        JsonNode live = reload(active);
+        assertThat(live.get("stops")).hasSize(2);
+        assertThat(live.get("stops").get(0).get("poiId").asText()).isEqualTo(kore.get("id").asText());
+        assertThat(live.get("stops").get(1).get("id").asText()).isEqualTo(first.get("id").asText());
+        assertThat(live.get("stops").get(1).get("translations").get("en").get("narrative").asText()).isEqualTo("Start");
+
+        mockMvc.perform(authenticated(delete(stopsUrl(active) + "/{stopId}", first.get("id").asText())))
+                .andExpect(status().isNoContent());
+        assertThat(reload(active).get("stops")).hasSize(2);
+        applyWorkingCopy(PROJECT_A, "routes", active.get("id").asText(), 200);
+        assertThat(reload(active).get("stops")).hasSize(1);
     }
 
     // --- Lifecycle and references ----------------------------------------------------------------

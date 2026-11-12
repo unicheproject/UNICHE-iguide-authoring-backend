@@ -1,6 +1,7 @@
 package eu.uniche.iguide.event.api;
 
 import eu.uniche.iguide.asset.api.AssetResponse;
+import eu.uniche.iguide.event.application.EventOccurrenceUseCase;
 import eu.uniche.iguide.event.application.EventView;
 import eu.uniche.iguide.event.domain.Event;
 import eu.uniche.iguide.event.domain.EventOccurrence;
@@ -29,6 +30,10 @@ public record EventResponse(UUID id, UUID projectId, String slug, ResourceStatus
 
         public static Occurrence from(EventOccurrence o) {
             return new Occurrence(o.getId(), o.getEventId(), o.getStartsAt(), o.getEndsAt(), o.getStatus());
+        }
+
+        public static Occurrence from(UUID eventId, EventOccurrenceUseCase.WantedOccurrence o) {
+            return new Occurrence(o.id(), eventId, o.startsAt(), o.endsAt(), o.status());
         }
     }
 

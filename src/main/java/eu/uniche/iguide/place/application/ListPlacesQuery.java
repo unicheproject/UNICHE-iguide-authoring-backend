@@ -1,5 +1,6 @@
 package eu.uniche.iguide.place.application;
 
+import eu.uniche.iguide.asset.domain.ResourceAsset;
 import eu.uniche.iguide.language.application.ProjectLanguageLookup;
 import eu.uniche.iguide.place.domain.Place;
 import eu.uniche.iguide.place.domain.PlaceTranslation;
@@ -37,14 +38,16 @@ public class ListPlacesQuery {
     private final ProjectLanguageLookup languages;
     private final PlaceRepository places;
     private final PlaceTranslationRepository translations;
+    private final PlaceRules rules;
 
     public ListPlacesQuery(ProjectAccessGateway accessGateway, ProjectLanguageLookup languages,
                            PlaceRepository places,
-                           PlaceTranslationRepository translations) {
+                           PlaceTranslationRepository translations, PlaceRules rules) {
         this.accessGateway = accessGateway;
         this.languages = languages;
         this.places = places;
         this.translations = translations;
+        this.rules = rules;
     }
 
     public Page<PlaceView> execute(UUID projectId, UnichePrincipal principal, ListParams params) {
@@ -75,6 +78,8 @@ public class ListPlacesQuery {
         Map<UUID, List<PlaceTranslation>> byPlace = ids.isEmpty() ? Map.of()
                 : translations.findByProjectIdAndPlaceIdIn(projectId, ids).stream()
                         .collect(Collectors.groupingBy(PlaceTranslation::getPlaceId));
-        return result.map(place -> new PlaceView(place, byPlace.getOrDefault(place.getId(), List.of())));
+        Map<UUID, List<ResourceAsset>> media = rules.media(projectId, ids);
+        return result.map(place -> new PlaceView(place, byPlace.getOrDefault(place.getId(), List.of()),
+                media.getOrDefault(place.getId(), List.of())));
     }
 }

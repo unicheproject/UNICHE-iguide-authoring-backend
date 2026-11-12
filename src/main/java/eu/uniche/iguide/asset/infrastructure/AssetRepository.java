@@ -17,4 +17,7 @@ public interface AssetRepository extends JpaRepository<Asset, UUID>, JpaSpecific
     List<Asset> findByProjectIdAndStatus(UUID projectId, ResourceStatus status);
 
     List<Asset> findByProjectIdAndIdIn(UUID projectId, Collection<UUID> ids);
+
+    /** Whether an Asset still points at the object; storage keys name their Project. */
+    boolean existsByStorageKey(String storageKey);
 }

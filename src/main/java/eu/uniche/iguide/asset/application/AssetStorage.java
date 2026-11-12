@@ -16,6 +16,9 @@ public interface AssetStorage {
 
     void store(String key, InputStream data, long sizeBytes, String contentType);
 
+    /** Deletes the object; deleting one that does not exist is not an error. */
+    void delete(String key);
+
     /** A URL that reads the object without further credentials until it expires. */
     URI signedReadUrl(String key, Duration validity);
 

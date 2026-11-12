@@ -1,5 +1,8 @@
 package eu.uniche.iguide.place.application;
 
+import eu.uniche.iguide.asset.application.ResourceMedia;
+import eu.uniche.iguide.asset.domain.AssetResourceType;
+import eu.uniche.iguide.asset.domain.ResourceAsset;
 import eu.uniche.iguide.place.domain.Place;
 import eu.uniche.iguide.place.infrastructure.PlaceRepository;
 import eu.uniche.iguide.place.infrastructure.PlaceTranslationRepository;
@@ -12,6 +15,7 @@ import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -26,12 +30,14 @@ public class PlaceRules {
     private final PlaceRepository places;
     private final PlaceTranslationRepository translations;
     private final List<PlaceReferenceSource> referenceSources;
+    private final ResourceMedia media;
 
     public PlaceRules(PlaceRepository places, PlaceTranslationRepository translations,
-                      List<PlaceReferenceSource> referenceSources) {
+                      List<PlaceReferenceSource> referenceSources, ResourceMedia media) {
         this.places = places;
         this.translations = translations;
         this.referenceSources = referenceSources;
+        this.media = media;
     }
 
     public Place requirePlace(UUID projectId, UUID placeId) {
@@ -40,7 +46,13 @@ public class PlaceRules {
     }
 
     public PlaceView view(Place place) {
-        return new PlaceView(place, translations.findByProjectIdAndPlaceId(place.getProjectId(), place.getId()));
+        return new PlaceView(place, translations.findByProjectIdAndPlaceId(place.getProjectId(), place.getId()),
+                media(place.getProjectId(), List.of(place.getId())).getOrDefault(place.getId(), List.of()));
+    }
+
+    /** The media bindings of several Places of one Project, by Place id. */
+    public Map<UUID, List<ResourceAsset>> media(UUID projectId, List<UUID> placeIds) {
+        return media.of(projectId, AssetResourceType.PLACE, placeIds);
     }
 
     /** Adds an error when the slug is malformed; throws {@code 409} when another Place uses it. */

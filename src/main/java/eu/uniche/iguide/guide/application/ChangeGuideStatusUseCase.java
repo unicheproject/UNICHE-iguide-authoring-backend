@@ -12,6 +12,7 @@ import eu.uniche.iguide.platform.web.ValidationFailedException;
 import eu.uniche.iguide.resource.application.ResourceRules;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import eu.uniche.iguide.workingcopy.application.WorkingCopyStore;
 import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
@@ -37,10 +38,12 @@ public class ChangeGuideStatusUseCase {
     private final GetGuideQuery getGuide;
     private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public ChangeGuideStatusUseCase(ProjectAccessGateway accessGateway, ProjectLanguageLookup languages,
                                     GuideRules rules, GuideRepository guides, GetGuideQuery getGuide,
-                                    WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate) {
+                                    WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate,
+                                    ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.languages = languages;
         this.rules = rules;
@@ -48,6 +51,7 @@ public class ChangeGuideStatusUseCase {
         this.getGuide = getGuide;
         this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public GuideView execute(UUID projectId, UUID guideId, UnichePrincipal principal, ResourceStatus target,
@@ -69,6 +73,7 @@ public class ChangeGuideStatusUseCase {
             if (target != ResourceStatus.ACTIVE) {
                 workingCopies.dropFor(projectId, WorkingCopyResourceType.GUIDE, guideId);
             }
+            contentRevision.afterTransition(projectId, guide.getStatus(), target);
             guide.changeStatus(target, principal.subject(), Instant.now());
             return rules.view(guides.saveAndFlush(guide));
         });

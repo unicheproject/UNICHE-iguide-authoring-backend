@@ -38,7 +38,14 @@ class SchemaAndMappingIntegrationTest extends PostgresIntegrationTest {
                 "guides", "guide_translations", "guide_blocks", "guide_block_translations",
                 "events", "event_translations", "event_occurrences",
                 "categories", "category_translations", "resource_categories",
-                "assets", "asset_translations", "resource_assets", "interaction_triggers");
+                "assets", "asset_translations", "resource_assets", "interaction_triggers",
+                "navigations", "navigation_items", "navigation_item_translations");
+    }
+
+    @Test
+    void liquibaseCreatedTheTemplateAndThemeTables() throws Exception {
+        assertThat(tableNames()).contains("project_surfaces", "application_templates", "style_presets",
+                "project_template_applications", "project_settings", "project_themes");
     }
 
     @Test

@@ -6,144 +6,143 @@ import eu.uniche.iguide.floorplan.infrastructure.FloorPlanPositionRepository;
 import eu.uniche.iguide.platform.projectaccess.ProjectAccessGateway;
 import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.platform.web.DuplicateValueException;
-import eu.uniche.iguide.platform.web.ErrorItem;
-import eu.uniche.iguide.resource.application.ErrorPaths;
 import eu.uniche.iguide.resource.application.ResourceRules;
+import eu.uniche.iguide.resource.domain.ResourceStatus;
 import eu.uniche.iguide.spatial.application.SpatialRules;
+import eu.uniche.iguide.workingcopy.application.PatchWorkingCopyUseCase;
+import eu.uniche.iguide.workingcopy.application.PatchWorkingCopyUseCase.Patched;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Positions, moves, and removes Resources on a DRAFT Floor Plan ({@code 07} section 14,
- * {@code .../floor-plans/{id}/positions}). An ACTIVE plan changes its positions through its working copy, whose
- * apply calls {@link #replacePositions} (DECISIONS.md D-027); these endpoints refuse it.
+ * Positions, moves, and removes Resources on a Floor Plan ({@code 07} section 14,
+ * {@code .../floor-plans/{id}/positions}). On a DRAFT plan the rows are written; on an ACTIVE one the change goes
+ * into the plan's working copy, started from the live plan when it has none, and visitors see it after apply
+ * (DECISIONS.md D-044). The answer has the same shape either way. An ARCHIVED plan is refused.
  */
 @Service
 public class FloorPlanPositionUseCase {
 
+    private static final String POSITIONS = "positions";
+
     private final ProjectAccessGateway accessGateway;
     private final FloorPlanRules rules;
-    private final SpatialRules spatial;
+    private final FloorPlanPositionWriter writer;
     private final FloorPlanPositionRepository positions;
+    private final PatchWorkingCopyUseCase patch;
     private final TransactionTemplate transactionTemplate;
 
-    public FloorPlanPositionUseCase(ProjectAccessGateway accessGateway, FloorPlanRules rules, SpatialRules spatial,
-                                    FloorPlanPositionRepository positions, TransactionTemplate transactionTemplate) {
+    public FloorPlanPositionUseCase(ProjectAccessGateway accessGateway, FloorPlanRules rules,
+                                    FloorPlanPositionWriter writer, FloorPlanPositionRepository positions,
+                                    PatchWorkingCopyUseCase patch, TransactionTemplate transactionTemplate) {
         this.accessGateway = accessGateway;
         this.rules = rules;
-        this.spatial = spatial;
+        this.writer = writer;
         this.positions = positions;
+        this.patch = patch;
         this.transactionTemplate = transactionTemplate;
     }
 
-    /** One wanted position of a working-copy payload; {@code id} names an existing position to keep. */
+    /**
+     * One position: a wanted one of a working-copy payload, where {@code id} names an existing position to keep,
+     * and what the endpoints answer. A position added to a working copy has an id there until apply gives it a row
+     * of its own.
+     */
     public record Wanted(UUID id, String resourceType, UUID resourceId, BigDecimal x, BigDecimal y, Integer rotation) {
+
+        static Wanted of(FloorPlanPosition p) {
+            return new Wanted(p.getId(), p.getResourceType(), p.getResourceId(), p.getX(), p.getY(), p.getRotation());
+        }
     }
 
-    public FloorPlanPosition position(UUID projectId, UUID planId, UnichePrincipal principal, String resourceType,
-                                      UUID resourceId, BigDecimal x, BigDecimal y, Integer rotation) {
+    public Wanted position(UUID projectId, UUID planId, UnichePrincipal principal, String resourceType,
+                           UUID resourceId, BigDecimal x, BigDecimal y, Integer rotation) {
         accessGateway.requireAccess(projectId, principal);
-        return transactionTemplate.execute(status -> {
-            requireDraftPlan(projectId, planId);
-            return positionIn(projectId, planId, resourceType, resourceId, x, y, rotation);
+        Wanted placed = transactionTemplate.execute(status -> active(projectId, planId) ? null
+                : Wanted.of(writer.position(projectId, planId, resourceType, resourceId, x, y, rotation)));
+        if (placed != null) {
+            return placed;
+        }
+        writer.checkNew(projectId, resourceType, resourceId, x, y, rotation);
+        return patch.execute(projectId, WorkingCopyResourceType.FLOOR_PLAN, planId, principal, payload -> {
+            List<Map<String, Object>> items = PatchWorkingCopyUseCase.children(payload, POSITIONS);
+            if (items.stream().anyMatch(item -> Objects.equals(String.valueOf(item.get("resourceType")), resourceType)
+                    && Objects.equals(String.valueOf(item.get("resourceId")), String.valueOf(resourceId)))) {
+                throw new DuplicateValueException("resourceId", FloorPlanPositionWriter.DUPLICATE);
+            }
+            Wanted added = new Wanted(UUID.randomUUID(), resourceType, resourceId, x, y, rotation);
+            items.add(entry(added));
+            return new Patched<>(added, POSITIONS + "[" + (items.size() - 1) + "]");
         });
     }
 
-    public FloorPlanPosition move(UUID projectId, UUID planId, UUID positionId, UnichePrincipal principal,
-                                  BigDecimal x, BigDecimal y, Integer rotation) {
+    public Wanted move(UUID projectId, UUID planId, UUID positionId, UnichePrincipal principal,
+                       BigDecimal x, BigDecimal y, Integer rotation) {
         accessGateway.requireAccess(projectId, principal);
-        return transactionTemplate.execute(status -> {
-            requireDraftPlan(projectId, planId);
-            return moveIn(requirePosition(projectId, planId, positionId), x, y, rotation);
+        Wanted moved = transactionTemplate.execute(status -> active(projectId, planId) ? null
+                : Wanted.of(writer.move(requirePosition(projectId, planId, positionId), x, y, rotation)));
+        if (moved != null) {
+            return moved;
+        }
+        FloorPlanPositionWriter.checkMove(x, y, rotation);
+        return patch.execute(projectId, WorkingCopyResourceType.FLOOR_PLAN, planId, principal, payload -> {
+            List<Map<String, Object>> items = PatchWorkingCopyUseCase.children(payload, POSITIONS);
+            Map<String, Object> item = PatchWorkingCopyUseCase.child(items, positionId)
+                    .orElseThrow(() -> SpatialRules.notFound("position on this floor plan"));
+            item.put("x", x);
+            item.put("y", y);
+            item.put("rotation", rotation);
+            return new Patched<>(new Wanted(positionId, String.valueOf(item.get("resourceType")),
+                    UUID.fromString(String.valueOf(item.get("resourceId"))), x, y, rotation),
+                    POSITIONS + "[" + items.indexOf(item) + "]");
         });
     }
 
     public void remove(UUID projectId, UUID planId, UUID positionId, UnichePrincipal principal) {
         accessGateway.requireAccess(projectId, principal);
-        transactionTemplate.executeWithoutResult(status -> {
-            requireDraftPlan(projectId, planId);
+        boolean removed = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+            if (active(projectId, planId)) {
+                return false;
+            }
             positions.delete(requirePosition(projectId, planId, positionId));
-        });
-    }
-
-    /**
-     * Makes the plan's positions exactly {@code wanted}, inside the caller's transaction and without a status
-     * check: the apply of a working copy (DECISIONS.md D-027). A wanted entry keeps the position its {@code id}
-     * names, or else one of the same Resource, and moves it; the others are positioned with the rules of
-     * {@link #position}; positions no entry claims are removed. Errors are reported at {@code positions[i]}.
-     */
-    public List<FloorPlanPosition> replacePositions(UUID projectId, UUID planId, List<Wanted> wanted) {
-        List<Wanted> desired = wanted == null ? List.of() : wanted;
-        List<FloorPlanPosition> unclaimed = new ArrayList<>(
-                positions.findByProjectIdAndFloorPlanIdOrderByIdAsc(projectId, planId));
-        FloorPlanPosition[] kept = new FloorPlanPosition[desired.size()];
-        Set<String> targets = new HashSet<>();
-        for (int i = 0; i < desired.size(); i++) {
-            Wanted w = desired.get(i);
-            if (!targets.add(w.resourceType() + ":" + w.resourceId())) {
-                throw new DuplicateValueException("positions[" + i + "].resourceId",
-                        "The resource is already on this floor plan.");
-            }
-            FloorPlanPosition match = unclaimed.stream()
-                    .filter(p -> w.id() != null && p.getId().equals(w.id()) && sameTarget(p, w))
-                    .findFirst()
-                    .or(() -> unclaimed.stream().filter(p -> sameTarget(p, w)).findFirst())
-                    .orElse(null);
-            if (match != null) {
-                unclaimed.remove(match);
-                kept[i] = match;
-            }
+            return true;
+        }));
+        if (!removed) {
+            patch.execute(projectId, WorkingCopyResourceType.FLOOR_PLAN, planId, principal, payload -> {
+                List<Map<String, Object>> items = PatchWorkingCopyUseCase.children(payload, POSITIONS);
+                items.remove(PatchWorkingCopyUseCase.child(items, positionId)
+                        .orElseThrow(() -> SpatialRules.notFound("position on this floor plan")));
+                return new Patched<>(true, POSITIONS);
+            });
         }
-        positions.deleteAll(unclaimed);
-        positions.flush();
-        List<FloorPlanPosition> result = new ArrayList<>();
-        for (int i = 0; i < desired.size(); i++) {
-            Wanted w = desired.get(i);
-            FloorPlanPosition existing = kept[i];
-            result.add(ErrorPaths.within("positions[" + i + "]", () -> existing != null
-                    ? moveIn(existing, w.x(), w.y(), w.rotation())
-                    : positionIn(projectId, planId, w.resourceType(), w.resourceId(), w.x(), w.y(), w.rotation())));
-        }
-        return result;
     }
 
-    private FloorPlanPosition positionIn(UUID projectId, UUID planId, String resourceType, UUID resourceId,
-                                         BigDecimal x, BigDecimal y, Integer rotation) {
-        List<ErrorItem> errors = new ArrayList<>();
-        spatial.checkTarget(projectId, resourceType, resourceId, errors);
-        FloorPlanRules.checkPosition(x, y, rotation, errors);
-        ResourceRules.throwIfAny(errors, "The position is invalid.");
-        if (positions.existsByProjectIdAndFloorPlanIdAndResourceTypeAndResourceId(projectId, planId, resourceType,
-                resourceId)) {
-            throw new DuplicateValueException("resourceId", "The resource is already on this floor plan.");
-        }
-        return positions.saveAndFlush(FloorPlanPosition.of(projectId, planId, resourceType, resourceId, x, y,
-                rotation));
-    }
-
-    private FloorPlanPosition moveIn(FloorPlanPosition position, BigDecimal x, BigDecimal y, Integer rotation) {
-        List<ErrorItem> errors = new ArrayList<>();
-        FloorPlanRules.checkPosition(x, y, rotation, errors);
-        ResourceRules.throwIfAny(errors, "The position is invalid.");
-        position.moveTo(x, y, rotation);
-        return positions.saveAndFlush(position);
-    }
-
-    private static boolean sameTarget(FloorPlanPosition position, Wanted wanted) {
-        return Objects.equals(position.getResourceType(), wanted.resourceType())
-                && Objects.equals(position.getResourceId(), wanted.resourceId());
-    }
-
-    private void requireDraftPlan(UUID projectId, UUID planId) {
+    /** Whether the plan is ACTIVE; a DRAFT one is written directly, an ARCHIVED one refused. */
+    private boolean active(UUID projectId, UUID planId) {
         FloorPlan plan = rules.requirePlan(projectId, planId);
+        if (plan.getStatus() == ResourceStatus.ACTIVE) {
+            return true;
+        }
         ResourceRules.requireDraft(plan.getStatus(), "floor plan");
+        return false;
+    }
+
+    private static Map<String, Object> entry(Wanted w) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("id", w.id());
+        item.put("resourceType", w.resourceType());
+        item.put("resourceId", w.resourceId());
+        item.put("x", w.x());
+        item.put("y", w.y());
+        item.put("rotation", w.rotation());
+        return item;
     }
 
     private FloorPlanPosition requirePosition(UUID projectId, UUID planId, UUID positionId) {

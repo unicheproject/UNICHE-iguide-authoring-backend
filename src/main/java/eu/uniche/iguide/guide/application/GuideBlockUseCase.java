@@ -2,6 +2,7 @@ package eu.uniche.iguide.guide.application;
 
 import eu.uniche.iguide.guide.domain.Guide;
 import eu.uniche.iguide.guide.domain.GuideBlock;
+import eu.uniche.iguide.guide.domain.GuideBlockTranslation;
 import eu.uniche.iguide.guide.domain.GuideBlockType;
 import eu.uniche.iguide.guide.domain.GuideTargetType;
 import eu.uniche.iguide.guide.infrastructure.GuideBlockRepository;
@@ -9,43 +10,54 @@ import eu.uniche.iguide.guide.infrastructure.GuideRepository;
 import eu.uniche.iguide.platform.projectaccess.ProjectAccessGateway;
 import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.platform.web.ErrorItem;
+import eu.uniche.iguide.platform.web.ResourceNotFoundException;
 import eu.uniche.iguide.platform.web.ValidationFailedException;
-import eu.uniche.iguide.resource.application.ErrorPaths;
 import eu.uniche.iguide.resource.application.ResourceRules;
+import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.workingcopy.application.PatchWorkingCopyUseCase;
+import eu.uniche.iguide.workingcopy.application.PatchWorkingCopyUseCase.Patched;
+import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The blocks of a DRAFT Guide, a child collection ({@code 07} section 14: {@code .../guides/{id}/blocks},
+ * The blocks of a Guide, a child collection ({@code 07} section 14: {@code .../guides/{id}/blocks},
  * {@code .../blocks/{blockId}}, {@code .../blocks:order}). Positions stay 0-based and contiguous: a new
- * block goes last, removing one closes the gap. A block keeps its type; its target may change. An ACTIVE
- * Guide changes its blocks through its working copy, whose apply calls {@link #replaceBlocks}
- * (DECISIONS.md D-027).
+ * block goes last, removing one closes the gap. A block keeps its type; its target may change. On a DRAFT Guide
+ * the rows are written; on an ACTIVE one the change goes into the Guide's working copy, started from the live
+ * Guide when it has none, and visitors see it after apply (DECISIONS.md D-045). The answer has the same shape
+ * either way. An ARCHIVED Guide is refused.
  */
 @Service
 public class GuideBlockUseCase {
 
+    private static final String BLOCKS = "blocks";
+
     private final ProjectAccessGateway accessGateway;
     private final GuideRules rules;
+    private final GuideBlockWriter writer;
     private final GuideRepository guides;
     private final GuideBlockRepository blocks;
+    private final PatchWorkingCopyUseCase patch;
     private final TransactionTemplate transactionTemplate;
 
-    public GuideBlockUseCase(ProjectAccessGateway accessGateway, GuideRules rules, GuideRepository guides,
-                             GuideBlockRepository blocks, TransactionTemplate transactionTemplate) {
+    public GuideBlockUseCase(ProjectAccessGateway accessGateway, GuideRules rules, GuideBlockWriter writer,
+                             GuideRepository guides, GuideBlockRepository blocks, PatchWorkingCopyUseCase patch,
+                             TransactionTemplate transactionTemplate) {
         this.accessGateway = accessGateway;
         this.rules = rules;
+        this.writer = writer;
         this.guides = guides;
         this.blocks = blocks;
+        this.patch = patch;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -57,152 +69,173 @@ public class GuideBlockUseCase {
                               Map<String, BlockTranslationInput> translations) {
     }
 
-    public BlockView add(UUID projectId, UUID guideId, UnichePrincipal principal, GuideBlockType type,
+    /**
+     * A block as the endpoints answer it: a row of a DRAFT Guide, or an entry of an ACTIVE Guide's working copy,
+     * whose id there becomes a row's at apply only for blocks that already existed.
+     */
+    public record BlockData(UUID id, GuideBlockType blockType, GuideTargetType resourceType, UUID resourceId,
+                            int sortOrder, Map<String, BlockTranslationInput> translations) {
+
+        static BlockData of(BlockView view) {
+            Map<String, BlockTranslationInput> texts = new HashMap<>();
+            for (GuideBlockTranslation t : view.translations()) {
+                texts.put(t.getLanguageCode(), new BlockTranslationInput(t.getText(), t.getCaption()));
+            }
+            GuideBlock b = view.block();
+            return new BlockData(b.getId(), b.getBlockType(), b.getResourceType(), b.getResourceId(),
+                    b.getSortOrder(), texts);
+        }
+
+        static BlockData of(WantedBlock block, int sortOrder) {
+            return new BlockData(block.id(), block.blockType(), block.resourceType(), block.resourceId(), sortOrder,
+                    block.translations() == null ? Map.of() : block.translations());
+        }
+    }
+
+    public BlockData add(UUID projectId, UUID guideId, UnichePrincipal principal, GuideBlockType type,
                          GuideTargetType targetType, UUID targetId, Map<String, BlockTranslationInput> translations) {
         accessGateway.requireAccess(projectId, principal);
-        return transactionTemplate.execute(status -> {
-            Guide guide = requireDraftGuide(projectId, guideId);
-            GuideBlock block = addIn(projectId, guideId, type, targetType, targetId, translations,
+        BlockData added = transactionTemplate.execute(status -> {
+            Guide guide = draftOrNull(projectId, guideId);
+            if (guide == null) {
+                return null;
+            }
+            GuideBlock block = writer.addIn(projectId, guideId, type, targetType, targetId, translations,
                     rules.blocksOf(projectId, guideId).size());
             rules.reconcileInlineAssets(projectId, guideId);
             touch(guide, principal);
-            return rules.blockView(block);
+            return BlockData.of(rules.blockView(block));
+        });
+        if (added != null) {
+            return added;
+        }
+        return patch.execute(projectId, WorkingCopyResourceType.GUIDE, guideId, principal, payload -> {
+            List<Map<String, Object>> items = PatchWorkingCopyUseCase.children(payload, BLOCKS);
+            WantedBlock block = new WantedBlock(UUID.randomUUID(), type, targetType, targetId,
+                    translations == null ? Map.of() : translations);
+            items.add(patch.entry(block));
+            int position = items.size() - 1;
+            return new Patched<>(BlockData.of(block, position), at(position));
         });
     }
 
-    public BlockView update(UUID projectId, UUID guideId, UUID blockId, UnichePrincipal principal,
+    public BlockData update(UUID projectId, UUID guideId, UUID blockId, UnichePrincipal principal,
                             GuideTargetType targetType, UUID targetId, Map<String, BlockTranslationInput> translations) {
         accessGateway.requireAccess(projectId, principal);
-        return transactionTemplate.execute(status -> {
-            Guide guide = requireDraftGuide(projectId, guideId);
+        BlockData updated = transactionTemplate.execute(status -> {
+            Guide guide = draftOrNull(projectId, guideId);
+            if (guide == null) {
+                return null;
+            }
             GuideBlock block = rules.requireBlock(projectId, guideId, blockId);
-            updateIn(projectId, block, targetType, targetId, translations);
+            writer.updateIn(projectId, block, targetType, targetId, translations);
             rules.reconcileInlineAssets(projectId, guideId);
             touch(guide, principal);
-            return rules.blockView(block);
+            return BlockData.of(rules.blockView(block));
+        });
+        if (updated != null) {
+            return updated;
+        }
+        return patch.execute(projectId, WorkingCopyResourceType.GUIDE, guideId, principal, payload -> {
+            List<Map<String, Object>> items = PatchWorkingCopyUseCase.children(payload, BLOCKS);
+            int position = items.indexOf(pending(items, blockId));
+            WantedBlock current = patch.read(items.get(position), WantedBlock.class);
+            // Languages not sent keep their texts, as on a DRAFT Guide.
+            Map<String, BlockTranslationInput> texts = new HashMap<>(
+                    current.translations() == null ? Map.of() : current.translations());
+            if (translations != null) {
+                texts.putAll(translations);
+            }
+            WantedBlock block = new WantedBlock(blockId, current.blockType(), targetType, targetId, texts);
+            items.set(position, patch.entry(block));
+            return new Patched<>(BlockData.of(block, position), at(position));
         });
     }
 
     public void remove(UUID projectId, UUID guideId, UUID blockId, UnichePrincipal principal) {
         accessGateway.requireAccess(projectId, principal);
-        transactionTemplate.executeWithoutResult(status -> {
-            Guide guide = requireDraftGuide(projectId, guideId);
+        boolean removed = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+            Guide guide = draftOrNull(projectId, guideId);
+            if (guide == null) {
+                return false;
+            }
             blocks.delete(rules.requireBlock(projectId, guideId, blockId));
             blocks.flush();
-            renumber(rules.blocksOf(projectId, guideId));
+            writer.renumber(rules.blocksOf(projectId, guideId));
             rules.reconcileInlineAssets(projectId, guideId);
             touch(guide, principal);
-        });
+            return true;
+        }));
+        if (!removed) {
+            patch.execute(projectId, WorkingCopyResourceType.GUIDE, guideId, principal, payload -> {
+                List<Map<String, Object>> items = PatchWorkingCopyUseCase.children(payload, BLOCKS);
+                items.remove(pending(items, blockId));
+                return new Patched<>(true, BLOCKS);
+            });
+        }
     }
 
     /** {@code PUT .../blocks:order}: every block id of the Guide, in the new order. */
-    public List<BlockView> reorder(UUID projectId, UUID guideId, UnichePrincipal principal, List<UUID> orderedIds) {
+    public List<BlockData> reorder(UUID projectId, UUID guideId, UnichePrincipal principal, List<UUID> orderedIds) {
         accessGateway.requireAccess(projectId, principal);
-        return transactionTemplate.execute(status -> {
-            Guide guide = requireDraftGuide(projectId, guideId);
+        List<UUID> ids = orderedIds == null ? List.of() : orderedIds;
+        List<BlockData> reordered = transactionTemplate.execute(status -> {
+            Guide guide = draftOrNull(projectId, guideId);
+            if (guide == null) {
+                return null;
+            }
             List<GuideBlock> current = rules.blocksOf(projectId, guideId);
             Map<UUID, GuideBlock> byId = current.stream().collect(Collectors.toMap(GuideBlock::getId, b -> b));
-            List<UUID> ids = orderedIds == null ? List.of() : orderedIds;
-            if (ids.size() != current.size() || !new HashSet<>(ids).equals(byId.keySet())) {
-                throw new ValidationFailedException("The order must list every block of the guide exactly once.",
-                        List.of(new ErrorItem("ids", "INCOMPLETE_ORDER", "List every block of this guide exactly once.")));
-            }
+            requireEvery(ids, byId.keySet().stream().toList());
             for (int i = 0; i < ids.size(); i++) {
                 byId.get(ids.get(i)).moveTo(i);
             }
             blocks.saveAllAndFlush(current);
             touch(guide, principal);
-            return rules.view(guide).blocks();
+            return rules.view(guide).blocks().stream().map(BlockData::of).toList();
+        });
+        if (reordered != null) {
+            return reordered;
+        }
+        return patch.execute(projectId, WorkingCopyResourceType.GUIDE, guideId, principal, payload -> {
+            List<Map<String, Object>> items = PatchWorkingCopyUseCase.children(payload, BLOCKS);
+            requireEvery(ids, items.stream().map(item -> UUID.fromString(String.valueOf(item.get("id")))).toList());
+            List<Map<String, Object>> ordered = ids.stream()
+                    .map(id -> PatchWorkingCopyUseCase.child(items, id).orElseThrow()).toList();
+            items.clear();
+            items.addAll(ordered);
+            List<BlockData> result = new ArrayList<>();
+            for (int i = 0; i < ordered.size(); i++) {
+                result.add(BlockData.of(patch.read(ordered.get(i), WantedBlock.class), i));
+            }
+            return new Patched<>(result, BLOCKS);
         });
     }
 
-    /**
-     * Makes the Guide's blocks exactly {@code wanted}, in that order, inside the caller's transaction and
-     * without a status check: the apply of a working copy. Blocks not wanted are removed, kept ones updated,
-     * the rest created; then the INLINE media rows follow the text. Errors are reported at {@code blocks[i]}.
-     * The Guide itself is touched by the caller's save of its own fields.
-     */
-    public void replaceBlocks(UUID projectId, UUID guideId, List<WantedBlock> wanted) {
-        List<WantedBlock> desired = wanted == null ? List.of() : wanted;
-        Map<UUID, GuideBlock> current = rules.blocksOf(projectId, guideId).stream()
-                .collect(Collectors.toMap(GuideBlock::getId, b -> b));
-        Set<UUID> kept = desired.stream().map(WantedBlock::id).filter(current::containsKey)
-                .collect(Collectors.toSet());
-        List<GuideBlock> removed = current.values().stream().filter(b -> !kept.contains(b.getId())).toList();
-        blocks.deleteAll(removed);
-        blocks.flush();
-
-        List<GuideBlock> ordered = new ArrayList<>();
-        Set<UUID> used = new HashSet<>();
-        for (int i = 0; i < desired.size(); i++) {
-            WantedBlock item = desired.get(i);
-            int position = i;
-            GuideBlock existing = item.id() != null && used.add(item.id()) ? current.get(item.id()) : null;
-            if (existing != null && kept.contains(existing.getId())) {
-                ordered.add(ErrorPaths.within("blocks[" + i + "]", () -> {
-                    if (item.blockType() != null && item.blockType() != existing.getBlockType()) {
-                        throw new ValidationFailedException("A block keeps its type.", List.of(new ErrorItem(
-                                "blockType", "IMMUTABLE", "Remove the block and add one of the other type.")));
-                    }
-                    return updateIn(projectId, existing, item.resourceType(), item.resourceId(), item.translations());
-                }));
-            } else {
-                ordered.add(ErrorPaths.within("blocks[" + i + "]", () -> addIn(projectId, guideId, item.blockType(),
-                        item.resourceType(), item.resourceId(), item.translations(), position)));
-            }
+    private static void requireEvery(List<UUID> ids, List<UUID> existing) {
+        if (ids.size() != existing.size() || !new HashSet<>(ids).equals(new HashSet<>(existing))) {
+            throw new ValidationFailedException("The order must list every block of the guide exactly once.",
+                    List.of(new ErrorItem("ids", "INCOMPLETE_ORDER", "List every block of this guide exactly once.")));
         }
-        renumber(ordered);
-        rules.reconcileInlineAssets(projectId, guideId);
     }
 
-    private GuideBlock addIn(UUID projectId, UUID guideId, GuideBlockType type, GuideTargetType targetType,
-                             UUID targetId, Map<String, BlockTranslationInput> translations, int position) {
-        List<ErrorItem> errors = new ArrayList<>();
-        rules.checkBlock(projectId, type, targetType, targetId, errors);
-        Map<String, BlockTranslationInput> normalized = normalize(projectId, type, translations, errors);
-        ResourceRules.throwIfAny(errors, "The block is invalid.");
-        GuideBlock block = blocks.saveAndFlush(GuideBlock.of(projectId, guideId, type, targetType, targetId, position));
-        rules.saveBlockTranslations(block, normalized);
-        return block;
-    }
-
-    private GuideBlock updateIn(UUID projectId, GuideBlock block, GuideTargetType targetType, UUID targetId,
-                                Map<String, BlockTranslationInput> translations) {
-        List<ErrorItem> errors = new ArrayList<>();
-        rules.checkBlock(projectId, block.getBlockType(), targetType, targetId, errors);
-        Map<String, BlockTranslationInput> normalized = normalize(projectId, block.getBlockType(), translations, errors);
-        ResourceRules.throwIfAny(errors, "The block is invalid.");
-        block.target(targetType, targetId);
-        blocks.saveAndFlush(block);
-        rules.saveBlockTranslations(block, normalized);
-        return block;
-    }
-
-    /** Positions 0 to n-1 in the given order; the order constraint is deferred to the commit. */
-    private void renumber(List<GuideBlock> inOrder) {
-        for (int i = 0; i < inOrder.size(); i++) {
-            inOrder.get(i).moveTo(i);
-        }
-        blocks.saveAllAndFlush(inOrder);
-    }
-
-    private Map<String, BlockTranslationInput> normalize(UUID projectId, GuideBlockType type,
-                                                         Map<String, BlockTranslationInput> translations,
-                                                         List<ErrorItem> errors) {
-        Map<String, BlockTranslationInput> requested = translations == null ? Map.of() : translations;
-        rules.checkLanguages(projectId, requested.keySet(), errors);
-        Map<String, BlockTranslationInput> normalized = new LinkedHashMap<>();
-        if (type != null) {
-            requested.forEach((code, input) -> normalized.put(code, rules.normalize(projectId, type, code,
-                    input == null ? new BlockTranslationInput(null, null) : input, errors)));
-        }
-        return normalized;
-    }
-
-    private Guide requireDraftGuide(UUID projectId, UUID guideId) {
+    /** The Guide when it is a DRAFT, {@code null} when it is ACTIVE; an ARCHIVED one is refused. */
+    private Guide draftOrNull(UUID projectId, UUID guideId) {
         Guide guide = rules.requireGuide(projectId, guideId);
+        if (guide.getStatus() == ResourceStatus.ACTIVE) {
+            return null;
+        }
         ResourceRules.requireDraft(guide.getStatus(), "guide");
         return guide;
+    }
+
+    private static Map<String, Object> pending(List<Map<String, Object>> items, UUID blockId) {
+        return PatchWorkingCopyUseCase.child(items, blockId)
+                .orElseThrow(() -> new ResourceNotFoundException("No such block in this guide."));
+    }
+
+    private static String at(int position) {
+        return BLOCKS + "[" + position + "]";
     }
 
     private void touch(Guide guide, UnichePrincipal principal) {

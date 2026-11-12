@@ -120,7 +120,7 @@ class GeographicMapIntegrationTest extends ContentIntegrationTest {
     }
 
     @Test
-    void placementsRejectUnsupportedTypesArchivedTargetsAndAnActiveMap() throws Exception {
+    void placementsRejectUnsupportedTypesArchivedTargetsAndAnArchivedMap() throws Exception {
         JsonNode map = createMap(PROJECT_A, Map.of());
         mockMvc.perform(json(post(mapsUrl(PROJECT_A) + "/{id}/resources", map.get("id").asText()),
                         Map.of("resourceType", "ROUTE", "resourceId", UUID.randomUUID().toString(),
@@ -142,8 +142,10 @@ class GeographicMapIntegrationTest extends ContentIntegrationTest {
                 .andExpect(jsonPath("$.errors[0].code").value("ARCHIVED_REFERENCE"));
 
         JsonNode active = changeStatus(mapsUrl(PROJECT_A), map.get("id").asText(), "ACTIVE", map.get("version").asLong(), 200);
+        JsonNode gone = changeStatus(mapsUrl(PROJECT_A), active.get("id").asText(), "ARCHIVED",
+                active.get("version").asLong(), 200);
         JsonNode place = createPlace(PROJECT_A, "Acropolis", "SITE");
-        mockMvc.perform(json(post(mapsUrl(PROJECT_A) + "/{id}/resources", active.get("id").asText()),
+        mockMvc.perform(json(post(mapsUrl(PROJECT_A) + "/{id}/resources", gone.get("id").asText()),
                         Map.of("resourceType", "PLACE", "resourceId", place.get("id").asText(),
                                 "latitude", 37.9, "longitude", 23.7)))
                 .andExpect(status().isUnprocessableEntity())

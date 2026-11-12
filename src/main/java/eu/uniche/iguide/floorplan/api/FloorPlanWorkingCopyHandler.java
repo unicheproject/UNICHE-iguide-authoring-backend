@@ -2,6 +2,7 @@ package eu.uniche.iguide.floorplan.api;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import eu.uniche.iguide.floorplan.application.FloorPlanPositionUseCase;
+import eu.uniche.iguide.floorplan.application.FloorPlanPositionWriter;
 import eu.uniche.iguide.floorplan.application.FloorPlanRules;
 import eu.uniche.iguide.floorplan.application.UpdateFloorPlanUseCase;
 import eu.uniche.iguide.floorplan.domain.FloorPlan;
@@ -38,15 +39,15 @@ public class FloorPlanWorkingCopyHandler implements WorkingCopyHandler<FloorPlan
     private final LiveRowLock lock;
     private final FloorPlanRules rules;
     private final UpdateFloorPlanUseCase updatePlan;
-    private final FloorPlanPositionUseCase positionUseCase;
+    private final FloorPlanPositionWriter positionWriter;
     private final FloorPlanPositionRepository positions;
 
     public FloorPlanWorkingCopyHandler(LiveRowLock lock, FloorPlanRules rules, UpdateFloorPlanUseCase updatePlan,
-                                       FloorPlanPositionUseCase positionUseCase, FloorPlanPositionRepository positions) {
+                                       FloorPlanPositionWriter positionWriter, FloorPlanPositionRepository positions) {
         this.lock = lock;
         this.rules = rules;
         this.updatePlan = updatePlan;
-        this.positionUseCase = positionUseCase;
+        this.positionWriter = positionWriter;
         this.positions = positions;
     }
 
@@ -71,7 +72,7 @@ public class FloorPlanWorkingCopyHandler implements WorkingCopyHandler<FloorPlan
     public void write(UUID projectId, UUID resourceId, UnichePrincipal principal, State state) {
         updatePlan.write(projectId, rules.requirePlan(projectId, resourceId), principal, new Details(
                 state.internalName(), state.placeId(), state.assetId(), state.width(), state.height()));
-        positionUseCase.replacePositions(projectId, resourceId, state.positions());
+        positionWriter.replacePositions(projectId, resourceId, state.positions());
     }
 
     @Override

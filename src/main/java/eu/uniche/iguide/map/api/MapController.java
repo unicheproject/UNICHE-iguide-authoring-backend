@@ -114,7 +114,7 @@ public class MapController {
         var created = placements.place(projectId, mapId, CurrentPrincipal.require(), request.resourceType(),
                 request.resourceId(), request.latitude(), request.longitude());
         return ResponseEntity.created(URI.create("/api/v1/projects/" + projectId + "/maps/" + mapId
-                + "/resources/" + created.getId())).body(MapResponse.Placement.from(created));
+                + "/resources/" + created.id())).body(MapResponse.Placement.from(created));
     }
 
     @PutMapping("/{mapId}/resources/{placementId}")

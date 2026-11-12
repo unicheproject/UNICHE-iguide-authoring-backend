@@ -38,9 +38,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class CategoryRules {
 
-    static final Pattern CODE = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
-    static final int MAX_CODE = 200;
-    static final int MAX_NAME = 200;
+    public static final Pattern CODE = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
+    public static final int MAX_CODE = 200;
+    public static final int MAX_NAME = 200;
 
     /** The platform icon set the CMS draws (DECISIONS.md D-024); {@code 03} section 10 names no keys. */
     public static final Set<String> ICONS = Set.of("monument", "building", "statue", "vase", "church", "castle", "tree",

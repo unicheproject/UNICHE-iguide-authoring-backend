@@ -65,6 +65,44 @@ class ResourceAssetIntegrationTest extends ContentIntegrationTest {
     }
 
     @Test
+    void aPlaceBindsAPrimaryImageAndAGalleryThatKeepTheAssetInUseAndGoThroughItsWorkingCopy() throws Exception {
+        JsonNode place = createPlace(PROJECT_A, "Upper Town", "AREA");
+        String placeId = place.get("id").asText();
+        String url = placeUrl(PROJECT_A) + "/" + placeId + "/resource-assets";
+        bind(url, image, "HERO_IMAGE", null, 201);
+        JsonNode detail = uploadAsset(PROJECT_A, "walls.png", "image/png", png(8, 8));
+        bind(url, detail, "GALLERY_IMAGE", null, 201);
+
+        JsonNode reloaded = read(mockMvc.perform(authenticated(get(placeUrl(PROJECT_A) + "/{id}", placeId)))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(reloaded.get("media")).extracting(m -> m.get("usage").asText())
+                .containsExactly("HERO_IMAGE", "GALLERY_IMAGE");
+        mockMvc.perform(authenticated(get(placeUrl(PROJECT_A))))
+                .andExpect(jsonPath("$.content[0].media.length()").value(2));
+
+        JsonNode inUse = changeStatus(assetUrl(PROJECT_A), image.get("id").asText(), "ARCHIVED",
+                image.get("version").asLong(), 409);
+        assertThat(inUse.get("references").get(0).get("resourceType").asText()).isEqualTo("PLACE");
+        assertThat(inUse.get("references").get(0).get("title").asText()).isEqualTo("Upper Town");
+
+        // ACTIVE: the media change waits in the working copy until it is applied.
+        JsonNode active = changeStatus(placeUrl(PROJECT_A), placeId, "ACTIVE", reloaded.get("version").asLong(), 200);
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("slug", active.get("slug").asText());
+        payload.put("type", "AREA");
+        payload.put("environment", active.get("environment").asText());
+        payload.put("featured", false);
+        payload.put("translations", Map.of("el", Map.of("title", "Upper Town")));
+        payload.put("media", List.of(Map.of("assetId", detail.get("id").asText(), "usage", "HERO_IMAGE")));
+        saveWorkingCopy(PROJECT_A, "places", placeId, active.get("version").asLong(), null, payload, 200);
+        mockMvc.perform(authenticated(get(url))).andExpect(jsonPath("$.length()").value(2));
+        JsonNode applied = applyWorkingCopy(PROJECT_A, "places", placeId, 200);
+        assertThat(applied.get("media")).hasSize(1);
+        assertThat(applied.get("media").get(0).get("assetId").asText()).isEqualTo(detail.get("id").asText());
+        assertThat(applied.get("media").get(0).get("usage").asText()).isEqualTo("HERO_IMAGE");
+    }
+
+    @Test
     void aModelNeedsItsPosterAndThePosterStaysWhileTheModelIsBound() throws Exception {
         JsonNode poi = createPoi(PROJECT_A, "{\"title\": \"Vase\"}");
         String url = poiUrl(PROJECT_A) + "/" + poi.get("id").asText() + "/resource-assets";

@@ -1,8 +1,10 @@
 package eu.uniche.iguide.map.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -134,6 +136,93 @@ class MapWorkingCopyIntegrationTest extends ContentIntegrationTest {
         mockMvc.perform(authenticated(get(workingCopyUrl(PROJECT_B, "maps", id(map)))))
                 .andExpect(status().isNotFound());
         applyWorkingCopy(PROJECT_B, "maps", id(map), 404);
+    }
+
+    @Test
+    void placementWritesOnAnActiveMapGoIntoItsWorkingCopy() throws Exception {
+        JsonNode map = activeMapWith(acropolis, agora);
+        List<JsonNode> live = placements(map);
+        JsonNode acropolisPlacement = live.stream()
+                .filter(p -> p.get("resourceId").asText().equals(id(acropolis))).findFirst().orElseThrow();
+        JsonNode agoraPlacement = live.stream()
+                .filter(p -> p.get("resourceId").asText().equals(id(agora))).findFirst().orElseThrow();
+        // Pending changes made elsewhere are kept by every child write.
+        saveWorkingCopy(PROJECT_A, "maps", id(map), map.get("version").asLong(), null,
+                payload("Athens old town", true, List.of(placement(acropolisPlacement, 37.97, 23.72),
+                        placement(agoraPlacement, 37.97, 23.72))), 200);
+
+        JsonNode added = read(mockMvc.perform(json(post(mapsUrl(PROJECT_A) + "/{id}/resources", id(map)),
+                        Map.of("resourceType", "PLACE", "resourceId", id(plaka), "latitude", 37.9720,
+                                "longitude", 23.7300)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.resourceId").value(id(plaka)))
+                .andReturn());
+        mockMvc.perform(json(put(mapsUrl(PROJECT_A) + "/{id}/resources/{placementId}", id(map), id(added)),
+                        Map.of("latitude", 37.9725, "longitude", 23.7305)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id(added)))
+                .andExpect(jsonPath("$.latitude").value(37.9725));
+        mockMvc.perform(json(put(mapsUrl(PROJECT_A) + "/{id}/resources/{placementId}", id(map), id(acropolisPlacement)),
+                        Map.of("latitude", 37.9716, "longitude", 23.7262)))
+                .andExpect(status().isOk());
+        mockMvc.perform(authenticated(delete(mapsUrl(PROJECT_A) + "/{id}/resources/{placementId}", id(map),
+                        id(agoraPlacement))))
+                .andExpect(status().isNoContent());
+
+        // Refused like on a DRAFT map: a second placement of a Resource, a wrong coordinate, an unknown placement.
+        mockMvc.perform(json(post(mapsUrl(PROJECT_A) + "/{id}/resources", id(map)), Map.of("resourceType", "PLACE",
+                        "resourceId", id(plaka), "latitude", 37.97, "longitude", 23.72)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].code").value("DUPLICATE_VALUE"))
+                .andExpect(jsonPath("$.errors[0].path").value("resourceId"));
+        mockMvc.perform(json(put(mapsUrl(PROJECT_A) + "/{id}/resources/{placementId}", id(map), id(added)),
+                        Map.of("latitude", 91, "longitude", 23.72)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors[0].path").value("latitude"));
+        mockMvc.perform(authenticated(delete(mapsUrl(PROJECT_A) + "/{id}/resources/{placementId}", id(map),
+                        id(agoraPlacement))))
+                .andExpect(status().isNotFound());
+
+        // Visitors still see the live map; the copy holds the change and the name saved before.
+        assertThat(placements(map)).hasSize(2);
+        JsonNode copy = read(mockMvc.perform(authenticated(get(workingCopyUrl(PROJECT_A, "maps", id(map)))))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(copy.get("payload").get("internalName").asText()).isEqualTo("Athens old town");
+        assertThat(copy.get("payload").get("placements")).hasSize(2);
+
+        applyWorkingCopy(PROJECT_A, "maps", id(map), 200);
+        List<JsonNode> now = placements(map);
+        assertThat(now.stream().map(p -> p.get("resourceId").asText()))
+                .containsExactlyInAnyOrder(id(acropolis), id(plaka));
+        JsonNode moved = now.stream().filter(p -> p.get("id").asText().equals(id(acropolisPlacement)))
+                .findFirst().orElseThrow();
+        assertThat(moved.get("latitude").decimalValue()).isEqualByComparingTo("37.9716");
+        JsonNode plakaNow = now.stream().filter(p -> p.get("resourceId").asText().equals(id(plaka)))
+                .findFirst().orElseThrow();
+        assertThat(plakaNow.get("latitude").decimalValue()).isEqualByComparingTo("37.9725");
+    }
+
+    @Test
+    void aChildWriteStartsTheCopyFromTheLiveMapAndAnArchivedMapRefusesIt() throws Exception {
+        JsonNode map = activeMapWith(acropolis);
+        mockMvc.perform(json(post(mapsUrl(PROJECT_A) + "/{id}/resources", id(map)), Map.of("resourceType", "PLACE",
+                        "resourceId", id(agora), "latitude", 37.97, "longitude", 23.72)))
+                .andExpect(status().isCreated());
+        JsonNode copy = read(mockMvc.perform(authenticated(get(workingCopyUrl(PROJECT_A, "maps", id(map)))))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(copy.get("baseVersion").asLong()).isEqualTo(map.get("version").asLong());
+        assertThat(copy.get("payload").get("internalName").asText()).isEqualTo("Athens centre");
+        assertThat(copy.get("resource").get("placements")).hasSize(2);
+
+        JsonNode archived = changeStatus(mapsUrl(PROJECT_A), id(map), "ARCHIVED", map.get("version").asLong(), 200);
+        mockMvc.perform(json(post(mapsUrl(PROJECT_A) + "/{id}/resources", id(archived)), Map.of("resourceType",
+                        "PLACE", "resourceId", id(plaka), "latitude", 37.97, "longitude", 23.72)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors[0].code").value("RESOURCE_NOT_EDITABLE"));
+        // Another Project's placement endpoints do not reach the map.
+        mockMvc.perform(json(post("/api/v1/projects/" + PROJECT_B + "/maps/{id}/resources", id(map)),
+                        Map.of("resourceType", "PLACE", "resourceId", id(plaka), "latitude", 37.97, "longitude", 23.72)))
+                .andExpect(status().isNotFound());
     }
 
     // --- Helpers ---------------------------------------------------------------------------------

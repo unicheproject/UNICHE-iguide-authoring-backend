@@ -134,7 +134,7 @@ public class Asset {
         this.checksum = file.checksum();
         this.width = file.width();
         this.height = file.height();
-        this.durationSeconds = null;
+        this.durationSeconds = file.durationSeconds();
         touch(subject, now);
     }
 
@@ -149,8 +149,8 @@ public class Asset {
         this.updatedAt = now;
     }
 
-    /** What was written to object storage for one upload. */
+    /** What was written to object storage for one upload; {@code durationSeconds} only for audio and video. */
     public record StoredFile(String provider, String key, String originalFilename, String mimeType, long sizeBytes,
-                             String checksum, Integer width, Integer height) {
+                             String checksum, Integer width, Integer height, BigDecimal durationSeconds) {
     }
 }

@@ -8,6 +8,7 @@ import eu.uniche.iguide.platform.security.UnichePrincipal;
 import eu.uniche.iguide.platform.web.ResourceNotFoundException;
 import eu.uniche.iguide.route.application.RouteRules;
 import eu.uniche.iguide.route.application.RouteStopUseCase;
+import eu.uniche.iguide.route.application.RouteStopWriter;
 import eu.uniche.iguide.route.application.UpdateRouteCommand;
 import eu.uniche.iguide.route.application.UpdateRouteUseCase;
 import eu.uniche.iguide.route.domain.Route;
@@ -45,12 +46,12 @@ public class RouteWorkingCopyHandler implements WorkingCopyHandler<RouteWorkingC
     private final LiveRowLock lock;
     private final RouteRules rules;
     private final UpdateRouteUseCase updateRoute;
-    private final RouteStopUseCase stops;
+    private final RouteStopWriter stops;
     private final ResourceCategoryUseCase categories;
     private final ResourceAssetUseCase media;
 
     public RouteWorkingCopyHandler(LiveRowLock lock, RouteRules rules, UpdateRouteUseCase updateRoute,
-                                   RouteStopUseCase stops, ResourceCategoryUseCase categories,
+                                   RouteStopWriter stops, ResourceCategoryUseCase categories,
                                    ResourceAssetUseCase media) {
         this.lock = lock;
         this.rules = rules;

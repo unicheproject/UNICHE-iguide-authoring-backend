@@ -74,6 +74,10 @@ public class SpatialRules {
     }
 
     public static <T> T require(Optional<T> found, String kind) {
-        return found.orElseThrow(() -> new ResourceNotFoundException("No such " + kind + " in this project."));
+        return found.orElseThrow(() -> notFound(kind));
+    }
+
+    public static ResourceNotFoundException notFound(String kind) {
+        return new ResourceNotFoundException("No such " + kind + " in this project.");
     }
 }

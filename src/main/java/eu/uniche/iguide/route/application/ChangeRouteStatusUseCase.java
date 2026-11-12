@@ -15,6 +15,7 @@ import eu.uniche.iguide.workingcopy.domain.WorkingCopyResourceType;
 import eu.uniche.iguide.route.domain.Route;
 import eu.uniche.iguide.route.domain.RouteStop;
 import eu.uniche.iguide.route.infrastructure.RouteRepository;
+import eu.uniche.iguide.settings.application.ContentRevision;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,10 +40,12 @@ public class ChangeRouteStatusUseCase {
     private final GetRouteQuery getRoute;
     private final WorkingCopyStore workingCopies;
     private final TransactionTemplate transactionTemplate;
+    private final ContentRevision contentRevision;
 
     public ChangeRouteStatusUseCase(ProjectAccessGateway accessGateway, ProjectLanguageLookup languages,
                                     RouteRules rules, RouteRepository routes, GetRouteQuery getRoute,
-                                    WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate) {
+                                    WorkingCopyStore workingCopies, TransactionTemplate transactionTemplate,
+                                    ContentRevision contentRevision) {
         this.accessGateway = accessGateway;
         this.languages = languages;
         this.rules = rules;
@@ -50,6 +53,7 @@ public class ChangeRouteStatusUseCase {
         this.getRoute = getRoute;
         this.workingCopies = workingCopies;
         this.transactionTemplate = transactionTemplate;
+        this.contentRevision = contentRevision;
     }
 
     public RouteView execute(UUID projectId, UUID routeId, UnichePrincipal principal, ResourceStatus target,
@@ -71,6 +75,7 @@ public class ChangeRouteStatusUseCase {
             if (target != ResourceStatus.ACTIVE) {
                 workingCopies.dropFor(projectId, WorkingCopyResourceType.ROUTE, routeId);
             }
+            contentRevision.afterTransition(projectId, route.getStatus(), target);
             route.changeStatus(target, principal.subject(), Instant.now());
             return rules.view(routes.saveAndFlush(route));
         });

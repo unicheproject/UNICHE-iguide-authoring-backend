@@ -7,16 +7,22 @@ import eu.uniche.iguide.platform.web.ValidationFailedException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
  * Checks an uploaded file against the limits and writes it to object storage ({@code 07} section 10:
- * the backend enforces the size limit, records checksum and MIME type, and writes the object).
+ * the backend enforces the size limit, records checksum and MIME type, and writes the object). Images get their
+ * dimensions, audio and video their duration (DECISIONS.md D-043).
  */
 @Component
 public class AssetFileWriter {
+
+    private static final Logger log = LoggerFactory.getLogger(AssetFileWriter.class);
 
     private final AssetStorage storage;
     private final AssetLimits limits;
@@ -43,13 +49,26 @@ public class AssetFileWriter {
     public Asset.StoredFile write(UploadedFile file, AssetType type, String key) {
         String checksum = file.sha256();
         Integer[] dimensions = type.isImage() ? file.dimensions() : new Integer[2];
+        BigDecimal duration = type == AssetType.AUDIO || type == AssetType.VIDEO ? MediaDuration.of(file) : null;
         try (InputStream data = file.open()) {
             storage.store(key, data, file.sizeBytes(), file.mimeType());
         } catch (IOException e) {
             throw new UncheckedIOException("The uploaded file could not be read", e);
         }
         return new Asset.StoredFile(storage.providerName(), key, file.filename(), file.mimeType(), file.sizeBytes(),
-                checksum, dimensions[0], dimensions[1]);
+                checksum, dimensions[0], dimensions[1], duration);
+    }
+
+    /**
+     * Deletes an object whose metadata write failed, so nothing points at it. Best effort: a failure is logged and
+     * the object stays behind, as before (DECISIONS.md D-043).
+     */
+    public void discard(String key) {
+        try {
+            storage.delete(key);
+        } catch (RuntimeException e) {
+            log.warn("Could not delete the unused stored object {}", key, e);
+        }
     }
 
     public static String originalKey(UUID projectId, UUID assetId) {
