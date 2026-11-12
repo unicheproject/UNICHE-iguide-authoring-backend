@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import eu.uniche.iguide.support.StubCatalogueServer;
 import eu.uniche.iguide.support.StubCatalogueServer.Response;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -75,7 +76,57 @@ class RestClientCatalogueClientTest {
         assertThat(project.id()).isEqualTo(PROJECT_ID.toString());
         assertThat(project.orgId()).isEqualTo(ORGANIZATION_ID.toString());
         assertThat(project.name()).isEqualTo("Museum of Naxos");
+        assertThat(project.createdAtInstant()).isEqualTo(Instant.parse("2026-08-12T09:30:00Z"));
+        assertThat(project.updatedAtInstant()).isEqualTo(Instant.parse("2026-10-01T14:05:12.345Z"));
         assertThat(catalogue.lastRequest().path()).isEqualTo("/api/v1/projects/" + PROJECT_ID);
+    }
+
+    /** A timestamp is shown, never used to decide anything, so a bad one must not refuse the Project. */
+    @Test
+    void readsAProjectWhoseTimestampsAreMissingOrUnparseable() {
+        catalogue.willRespond(Response.of(200, """
+                {
+                  "id": "%s",
+                  "orgId": "%s",
+                  "name": "Museum of Naxos",
+                  "createdAt": "last tuesday"
+                }
+                """.formatted(PROJECT_ID, ORGANIZATION_ID)));
+
+        CatalogueProjectDto project = client.getProject(PROJECT_ID);
+
+        assertThat(project.name()).isEqualTo("Museum of Naxos");
+        assertThat(project.createdAtInstant()).isNull();
+        assertThat(project.updatedAtInstant()).isNull();
+    }
+
+    @Test
+    void readsCatalogueTimestampsWithAnOffsetOrWithoutOne() {
+        assertThat(CatalogueTimestamps.parse("2026-08-12T11:30:00+02:00"))
+                .isEqualTo(Instant.parse("2026-08-12T09:30:00Z"));
+        assertThat(CatalogueTimestamps.parse("2026-08-12T09:30:00"))
+                .isEqualTo(Instant.parse("2026-08-12T09:30:00Z"));
+        assertThat(CatalogueTimestamps.parse(" ")).isNull();
+        assertThat(CatalogueTimestamps.parse(null)).isNull();
+    }
+
+    /** {@code 02} §11: the organizations the caller may see, from the Catalogue's spelling of the path. */
+    @Test
+    void listsOrganizationsFromTheCataloguesOrganisationsPath() {
+        catalogue.willRespond(Response.of(200, """
+                [
+                  {"id": "%s", "name": "Naxos Heritage", "slug": "naxos-heritage", "status": "ACTIVE",
+                   "hasImage": false, "createdAt": "2026-01-01T00:00:00Z"}
+                ]
+                """.formatted(ORGANIZATION_ID)));
+
+        List<CatalogueOrganizationDto> organizations = client.listOrganizations();
+
+        assertThat(organizations).containsExactly(new CatalogueOrganizationDto(
+                ORGANIZATION_ID.toString(), "Naxos Heritage", "naxos-heritage", "ACTIVE"));
+        assertThat(catalogue.lastRequest().method()).isEqualTo("GET");
+        assertThat(catalogue.lastRequest().path()).isEqualTo("/api/v1/organisations");
+        assertThat(catalogue.lastRequest().authorization()).isEqualTo("Bearer the-users-token");
     }
 
     /** The Catalogue spells the segment {@code organisations}; this API exposes {@code organizations}. */
@@ -199,6 +250,7 @@ class RestClientCatalogueClientTest {
                 catalogue -> catalogue.listProjectsForOrganization(ORGANIZATION_ID),
                 catalogue -> catalogue.listDeletedProjectsForOrganization(ORGANIZATION_ID),
                 catalogue -> catalogue.getOrganization(ORGANIZATION_ID),
+                catalogue -> catalogue.listOrganizations(),
                 catalogue -> catalogue.getMeAuthorization());
     }
 
@@ -217,7 +269,9 @@ class RestClientCatalogueClientTest {
                   "name": "Museum of Naxos",
                   "slug": "museum-of-naxos",
                   "status": "ACTIVE",
-                  "tool": { "slug": "iguide" }
+                  "tool": { "slug": "iguide" },
+                  "createdAt": "2026-08-12T09:30:00Z",
+                  "updatedAt": "2026-10-01T14:05:12.345Z"
                 }
                 """.formatted(PROJECT_ID, ORGANIZATION_ID);
     }

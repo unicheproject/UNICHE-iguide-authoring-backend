@@ -22,8 +22,8 @@ import lombok.Setter;
  * <p>This row is never proof of access. Its presence says the Catalogue once acknowledged the Project,
  * nothing more; every Project-scoped request re-checks access upstream.
  *
- * <p>{@code catalogueName}, {@code catalogueSlug}, and {@code catalogueStatus} are cached snapshots the
- * Catalogue owns. {@code localDescription} and {@code initializedAt} are owned by this authoring tool.
+ * <p>{@code catalogueName}, {@code catalogueSlug}, {@code catalogueStatus}, {@code catalogueCreatedAt},
+ * and {@code catalogueUpdatedAt} are cached snapshots the Catalogue owns. {@code localDescription} and {@code initializedAt} are owned by this authoring tool.
  */
 @Entity
 @Table(name = "projects")
@@ -100,6 +100,19 @@ public class Project {
         this.updatedAt = now;
         // A Project the Catalogue is answering for again is not deleted, whatever an earlier 404 said.
         this.locallyDeletedAt = null;
+    }
+
+    /**
+     * Records the Catalogue's own creation and update times. A value the Catalogue did not send, or sent
+     * unreadably, leaves the stored one alone: its absence says nothing about the Project.
+     */
+    public void applyCatalogueTimestamps(Instant catalogueCreatedAt, Instant catalogueUpdatedAt) {
+        if (catalogueCreatedAt != null) {
+            this.catalogueCreatedAt = catalogueCreatedAt;
+        }
+        if (catalogueUpdatedAt != null) {
+            this.catalogueUpdatedAt = catalogueUpdatedAt;
+        }
     }
 
     public void markLocallyDeleted(Instant now) {

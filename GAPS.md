@@ -122,13 +122,6 @@ Keycloak and the Catalogue).
 - Spec: `10` §3.
 - Closed by: M1b (Liquibase roles), M0b (mode, fixture), M0a (springdoc), M8 (runtime).
 
-### G-016 — Catalogue timestamps not mapped
-
-- Found: `CatalogueProjectDto` has no `createdAt` and `updatedAt`; a comment in `ProjectAccessService`
-  says the Catalogue does not return them. It does (live `ProjectResponse`, 2026-10-02).
-- Spec: `02` §4, §9.
-- Closed by: M1c test that the companion row carries both values.
-
 ### G-017 — Local slug rule differs from the Catalogue
 
 - Found: `CreateProjectRequest.slug` is `[a-z0-9]+(-[a-z0-9]+)*`, max 100; the Catalogue accepts
@@ -159,13 +152,6 @@ Keycloak and the Catalogue).
 - Consequence: no milestone can be fully done.
 - Closed by: C0 passing against this backend.
 
-### G-021 — No organizations passthrough
-
-- Found: no `GET /api/v1/organizations`; the CMS picker cannot name organizations without calling the
-  Catalogue itself.
-- Spec: `02` §11, `07` §14, `12` §7 (amended 2026-10-02, D-014).
-- Closed by: M1c test that the endpoint relays the Catalogue body and touches no local state.
-
 ### G-032 — Assets: runtime delivery, processing, and the rest of Milestone 3
 
 - Found (M3, 2026-10-16):
@@ -173,8 +159,10 @@ Keycloak and the Catalogue).
     (Milestone 8);
   - no `AI_OUTPUT_UNREVIEWED` warning or `CONTENT_REVIEWED` action on `provenance` (`08` Milestone 3);
     the column exists on every translation table but nothing writes or reads it;
-  - `durationSeconds` is never measured for audio and video; no virus scanning, transcoding, or resumable
-    upload (`09` §2); objects of replaced files and of failed metadata writes are never cleaned up;
+  - `durationSeconds` is never measured for audio and video (done 2026-11-10, D-043: read from the container
+    header); no virus scanning, transcoding, or resumable upload (`09` §2); objects of replaced files and of failed
+    metadata writes are never cleaned up (done 2026-11-10, D-043: deleted at once on a failed write, queued past the
+    signed URL lifetime on a replacement);
   - no theme references to Assets (Milestone 2), so an Asset used by a theme is not kept in use;
   - an ACTIVE Resource changes its media only through its working copy since 2026-10-21 (D-027).
 - Closed by: Milestones 2, 8, and 13, and a storage cleanup job.
@@ -195,13 +183,14 @@ Keycloak and the Catalogue).
 ### G-034 — Working copies: what Milestone 8 still owes them
 
 - Found (M8w, 2026-10-20):
-  - apply does not increment `contentRevision` (no ProjectSettings, G-024) and appends no
+  - apply does not increment `contentRevision` (no ProjectSettings, G-024; done 2026-11-09, D-042) and appends no
     `RESOURCE_CHANGES_APPLIED`; discard appends no `RESOURCE_WORKING_COPY_DISCARDED` (Milestone 7, G-023);
   - the CMS banner names the last editor by subject, not by the Audit Event's display name (`12` §4);
   - a `409` carries `currentVersion` but no `conflictingFields` (`07` §15); the CMS compares the values
     itself;
   - child endpoints under an ACTIVE parent answer `422 RESOURCE_NOT_EDITABLE` instead of writing into the
-    copy (`07` §14, D-027);
+    copy (`07` §14, D-027); done 2026-11-10 for map placements and floor plan positions (D-044) and for route
+    stops, guide blocks, and event occurrences (D-045);
   - the preview does not render working copies (no runtime API, Milestone 8);
   - Assets have no working copy (`hasWorkingCopy` stays false); they remain edited in place (D-025).
 - Closed by: Milestones 2, 7, and 8, and a child-endpoint slice.
@@ -211,11 +200,16 @@ Keycloak and the Catalogue).
 - Found (D-029, 2026-10-22):
   - the Template's `supportedSurfaces` are not checked when a surface is enabled (`03` §2, `04` §11): no Template
     exists before M2a;
-  - surface changes do not increment `contentRevision` (G-024) and append no Audit Event (G-023);
+  - surface changes do not increment `contentRevision` (G-024; done 2026-11-09, D-042) and append no Audit Event
+    (G-023);
   - readiness does not report `NO_SURFACE_ENABLED` or `PUBLIC_BASE_URL_MISSING` (`07` §14, Milestone 8);
   - `configuration` takes only `publicBaseUrl`; the Template's `runtimeDefaults` and other keys (`04` §6) wait
     for Templates; a surface's capability overrides are not modelled;
   - Project initialization does not create the surfaces (`04` §8).
+- Progress (D-040, 2026-11-04, R26): initialization creates the surfaces, and once a Project is initialized
+  enabling a surface its Template does not support is refused; readiness has reported `NO_SURFACE_ENABLED` and
+  `PUBLIC_BASE_URL_MISSING` since D-033. Open:
+  `contentRevision`, Audit Events, `runtimeDefaults` keys beyond `publicBaseUrl`, capability overrides (G-038).
 - Closed by: Milestones 2 (M2a and initialization), 7, and 8.
 
 ### G-036 — Readiness codes not produced yet
@@ -224,8 +218,11 @@ Keycloak and the Catalogue).
   Milestone 2), `MISSING_CAPTION_TRACK` (no caption metadata on videos), `MAP_WITHOUT_POI_LIST`,
   `CAPABILITY_DISABLED`, and `UNREACHABLE_PAGE` (no Pages or Navigation, Milestone 6); the "missing summary"
   warning of `03` §1 has no code in `07` §14 and is not reported. `AI_OUTPUT_UNREVIEWED` is reported since D-035
-  for the Resources' own texts (children and Assets: G-037).
+  for the Resources' own texts (children and Assets: G-037). `CAPABILITY_DISABLED` is reported since D-046 for menu
+  items whose target's capability is off; Pages and their components follow with them.
 - Spec: `07` §14, `14` §2.
+- Progress (D-040, 2026-11-04, R26): `TEMPLATE_VALIDATION_FAILED` (an enabled surface the Template does not support)
+  and `THEME_CONTRAST_FAILED` are reported for initialized Projects.
 - Closed by: Milestones 2 and 6, caption metadata, and a decided code for a missing summary.
 
 ### G-037 — MuseMind translation: what Milestone 13 still owes
@@ -241,6 +238,30 @@ Keycloak and the Catalogue).
   - editor saves of the whole Resource never count as review, even when they change a machine-translated text.
 - Spec: `03` §1; `07` §14; `09` §16; `12` §3; `08` Milestone 13.
 - Closed by: the gateway API and Milestones 7 and 13.
+
+### G-038 — Templates and initialization: what Milestone 2 still owes
+
+- Found (D-040, 2026-11-04):
+  - Pages, Page Components, and Navigation are not materialized (`04` §8 steps 9–11): they do not exist before
+    Milestone 6, so seeded Templates define none and the seeder refuses `initialPages` / `initialNavigations`;
+  - no `TEMPLATE_APPLIED` Audit Event (`04` §8 step 14, `05`): no audit table before Milestone 7 (G-023);
+  - `applicationStatus` is always `DRAFT`: no `settings/application-status` endpoint, no activation gate, no
+    `APPLICATION_ACTIVATED` events (`03` §2, `07` §14, `08` Milestone 2 last criterion);
+  - `contentRevision` is not incremented by theme, settings, language, or surface changes (G-024, Milestone 8);
+  - `runtimeConfiguration` is stored empty, neither validated nor writable; `runtimeDefaults` may hold only keys the
+    surfaces endpoint accepts (G-035); surface capability overrides are not modelled;
+  - an Asset used as a theme logo is not listed by `GET .../assets/{id}/references` and its archival is not refused
+    (`07` §14); the foreign key keeps the row consistent;
+  - no Template `previewAssetId` or preview metadata, no preset status, no administration API (deferred by `04`
+    §15); a Template or preset whose file is removed stays in the table; seeding assumes one instance starts at a
+    time;
+  - the shell rules of `04` §9 that depend on capabilities and surfaces (greyed rows) are left to the CMS and the
+    runtime; readiness does not report `featureConfiguration` keys outside the Template;
+  - the organization Project listing carries no initialization fields (Q-020); region as a data dimension is open
+    (`09` §20), so `multi-region-network` has no region behaviour; the font set is assumed (`09` §19, Q-022);
+  - the new tables have no Row-Level Security (G-009).
+- Spec: `04` §6–11, §13; `03` §2; `05`; `07` §14; `08` Milestone 2.
+- Closed by: Milestones 6, 7, and 8, the activation slice, M1b, and answers to Q-020 and Q-022.
 
 ## Closed
 
@@ -263,12 +284,41 @@ Keycloak and the Catalogue).
 - Consequence: none at run time; the spec text is wrong for Boot 3.4 extraction. QUESTIONS.md Q-007.
 - Closed 2026-10-02 by DECISIONS.md D-014: `10` §6 item 5 now names the `java -jar` entrypoint.
 
+### G-016 — Catalogue timestamps not mapped
+
+- Found: `CatalogueProjectDto` has no `createdAt` and `updatedAt`; a comment in `ProjectAccessService`
+  says the Catalogue does not return them. It does (live `ProjectResponse`, 2026-10-02).
+- Spec: `02` §4, §9.
+- Closed by: M1c test that the companion row carries both values.
+- Closed 2026-11-03 (to-do A47, DECISIONS.md D-039): `CatalogueProjectDto` reads both (leniently, `null` when
+  missing or unparseable), the companion upsert writes `catalogue_created_at` / `catalogue_updated_at`, and every
+  `ProjectResponse` carries `createdAt` / `updatedAt`. Evidence: TRACEABILITY.md R25,
+  `ProjectLifecycleIntegrationTest` (`theCataloguesTimestampsReachTheCompanionRowAndTheResponse`,
+  `aProjectWithoutReadableTimestampsIsStillRead`), `RestClientCatalogueClientTest`
+  (`readsAProjectWhoseTimestampsAreMissingOrUnparseable`).
+
+### G-021 — No organizations passthrough
+
+- Found: no `GET /api/v1/organizations`; the CMS picker cannot name organizations without calling the
+  Catalogue itself.
+- Spec: `02` §11, `07` §14, `12` §7 (amended 2026-10-02, D-014).
+- Closed by: M1c test that the endpoint relays the Catalogue body and touches no local state.
+- Closed 2026-11-03 (to-do A47, DECISIONS.md D-039): `GET /api/v1/organizations` relays the Catalogue's
+  `GET /api/v1/organisations` as `[{id, name, slug, status}]` through `ListOrganizationsPassthroughQuery`. Evidence:
+  TRACEABILITY.md R25, `ProjectLifecycleIntegrationTest` (`listingOrganizationsRelaysTheCatalogueAndTouchesNoLocalState`,
+  `listingOrganizationsRequiresAToken`, `listingOrganizationsReportsTheUpstreamFailure`),
+  `RestClientCatalogueClientTest` (`listsOrganizationsFromTheCataloguesOrganisationsPath` and the every-method status
+  mapping). Found by the CMS: the picker and Dashboard showed "Organisation 5d1e7a52"; with it the Project dates
+  (G-016), shown as "—".
+
 ### G-022 — No Row-Level Security on the content and spatial tables
 
 - Found: `project_languages`, `places`, `place_translations`, `geographic_maps`,
   `geographic_map_resources`, `floor_plans`, `floor_plan_positions` have no policy (`06` §13).
 - Consequence: isolation rests on Project-scoped queries and composite foreign keys only.
 - Closed by: M1b, adding a policy per table in a new changeset.
+- Note (2026-11-10, D-043): `asset_storage_cleanups` is read across Projects by the storage cleanup job; its policy
+  needs a role or setting that lets that job through.
 
 ### G-023 — Content writes append no Audit Event
 
@@ -282,6 +332,12 @@ Keycloak and the Catalogue).
   runtime-visible change increments `contentRevision`; there is no Project timezone to render event
   occurrences in and no `featureConfiguration`, so the `EVENTS` capability is never checked (D-023).
 - Spec: `03` §2, `11` §4. Closed by: M2 (settings) and M8 (revision upkeep).
+- Progress (D-040, 2026-11-04, R26): `project_settings` exists with `featureConfiguration` (restricted to the
+  Template's capabilities) and `timezone`, created by initialization. Open: `contentRevision` upkeep, the `EVENTS`
+  capability check, event occurrences in the Project timezone.
+- Progress (D-042, 2026-11-09, R28): `contentRevision` upkeep for every mutation that exists today. Open: Navigation
+  (M6) and `applicationStatus` (G-038) when they exist, the `EVENTS` capability check, the manifest `ETag` (M8).
+  Navigation writes raise it since D-046 (2026-11-11, R31).
 
 ### G-025 — Floor Plan image is not an Asset
 
@@ -301,6 +357,8 @@ Keycloak and the Catalogue).
   `featured`, `categoryId`, and `sort` (2026-10-22, D-030, TRACEABILITY.md R16); `translations/{lang}` of the
   six content kinds (2026-10-23, D-031, R17); those of Route Stops, Guide Blocks, and Assets (2026-10-23, D-032,
   R18). Every path of `07` §14 for the existing kinds now exists; Navigation items follow with Milestone 6.
+  2026-11-11 (D-046, R31): the `navigations` paths exist, items and their per-language labels included; Pages and
+  their components remain.
 - Spec: `07` §14. Closed by: Milestones 3, 4, and 8 as their entities land.
 
 ### G-027 — No working copies
@@ -347,3 +405,14 @@ Keycloak and the Catalogue).
 - Closed 2026-10-16 (M3): TEXT blocks take `asset` nodes; every block write reconciles the Guide's INLINE
   rows (DECISIONS.md D-025). Evidence: TRACEABILITY.md R11,
   `ResourceAssetIntegrationTest.imagesInGuideTextBecomeInlineBindingsThatFollowEverySave`.
+
+### G-039 — Navigation: what Milestone 6 and later still owe
+
+- Found (D-046, 2026-11-11):
+  - items cannot target Pages (`03` §13): Pages do not exist yet (the rest of Milestone 6);
+  - no `NAVIGATION_UPDATED` Audit Event (`05`): no audit table before Milestone 7 (G-023);
+  - Navigations are not in a manifest, and items whose target is off on a surface are not dropped from it
+    (`11` §4, `08` M6 criterion): no runtime API before Milestone 8;
+  - Templates materialize no initial Navigations (`04` §8 step 11, G-038).
+- Spec: `03` §13, `05`, `08` Milestone 6, `11` §4. Closed by: Milestones 6 (Pages), 7, 8.
+

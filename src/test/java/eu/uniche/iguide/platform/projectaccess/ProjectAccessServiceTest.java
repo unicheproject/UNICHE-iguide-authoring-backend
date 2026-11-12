@@ -75,7 +75,7 @@ class ProjectAccessServiceTest {
     @Test
     void aConcurrentSynchronizationOfTheSameRowIsNotAFailure() {
         CatalogueProjectDto dto = new CatalogueProjectDto(PROJECT_ID.toString(), UUID.randomUUID().toString(),
-                "Museum", "museum", "ACTIVE", new CatalogueProjectDto.CatalogueToolDto("iguide"));
+                "Museum", "museum", "ACTIVE", new CatalogueProjectDto.CatalogueToolDto("iguide"), null, null);
         Project row = Project.companionOf(PROJECT_ID, UUID.fromString(dto.orgId()), "Museum", "museum", "ACTIVE",
                 Instant.now());
         when(catalogueClient.getProject(PROJECT_ID)).thenReturn(dto);

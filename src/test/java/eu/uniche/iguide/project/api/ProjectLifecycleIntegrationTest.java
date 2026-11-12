@@ -3,7 +3,10 @@ package eu.uniche.iguide.project.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -27,6 +30,7 @@ import eu.uniche.iguide.project.domain.Project;
 import eu.uniche.iguide.project.infrastructure.ProjectRepository;
 import eu.uniche.iguide.support.PostgresIntegrationTest;
 import eu.uniche.iguide.support.TestIdp;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +49,8 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
 
     private static final UUID PROJECT_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final UUID ORGANIZATION_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
+    private static final String CREATED_AT = "2026-08-12T09:30:00Z";
+    private static final String UPDATED_AT = "2026-10-01T14:05:12.345Z";
 
     @Autowired
     private MockMvc mockMvc;
@@ -110,9 +116,38 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.id").value(PROJECT_ID.toString()))
                 .andExpect(jsonPath("$.organizationId").value(ORGANIZATION_ID.toString()))
                 .andExpect(jsonPath("$.name").value("Museum of Naxos"))
-                .andExpect(jsonPath("$.initialized").value(false));
+                .andExpect(jsonPath("$.initialized").value(false))
+                .andExpect(jsonPath("$.createdAt").value(CREATED_AT))
+                .andExpect(jsonPath("$.updatedAt").value(UPDATED_AT));
 
         assertThat(projects.findById(PROJECT_ID)).isPresent();
+    }
+
+    /** GAPS.md G-016: the Catalogue's own times reach the companion row, and from it every response. */
+    @Test
+    void theCataloguesTimestampsReachTheCompanionRowAndTheResponse() throws Exception {
+        when(catalogueClient.getProject(PROJECT_ID)).thenReturn(catalogueProject("Museum of Naxos"));
+
+        mockMvc.perform(authenticated(get("/api/v1/projects/{id}", PROJECT_ID)))
+                .andExpect(status().isOk());
+
+        Project companion = projects.findById(PROJECT_ID).orElseThrow();
+        assertThat(companion.getCatalogueCreatedAt()).isEqualTo(Instant.parse(CREATED_AT));
+        assertThat(companion.getCatalogueUpdatedAt()).isEqualTo(Instant.parse(UPDATED_AT));
+    }
+
+    /** A timestamp the Catalogue left out, or sent unreadably, is null and never fails the read. */
+    @Test
+    void aProjectWithoutReadableTimestampsIsStillRead() throws Exception {
+        when(catalogueClient.getProject(PROJECT_ID)).thenReturn(new CatalogueProjectDto(
+                PROJECT_ID.toString(), ORGANIZATION_ID.toString(), "Museum of Naxos", "museum-of-naxos",
+                "ACTIVE", new CatalogueProjectDto.CatalogueToolDto("iguide"), "not a date", null));
+
+        mockMvc.perform(authenticated(get("/api/v1/projects/{id}", PROJECT_ID)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Museum of Naxos"))
+                .andExpect(jsonPath("$.createdAt").doesNotExist())
+                .andExpect(jsonPath("$.updatedAt").doesNotExist());
     }
 
     @Test
@@ -234,7 +269,9 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("New name"))
-                .andExpect(jsonPath("$.localDescription").value("Authoring notes"));
+                .andExpect(jsonPath("$.localDescription").value("Authoring notes"))
+                .andExpect(jsonPath("$.createdAt").value(CREATED_AT))
+                .andExpect(jsonPath("$.updatedAt").value(UPDATED_AT));
 
         assertThat(projects.findById(PROJECT_ID).orElseThrow().getLocalDescription())
                 .isEqualTo("Authoring notes");
@@ -272,7 +309,9 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
 
         mockMvc.perform(authenticated(get("/api/v1/organizations/{orgId}/projects", ORGANIZATION_ID)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(PROJECT_ID.toString()));
+                .andExpect(jsonPath("$[0].id").value(PROJECT_ID.toString()))
+                .andExpect(jsonPath("$[0].createdAt").value(CREATED_AT))
+                .andExpect(jsonPath("$[0].updatedAt").value(UPDATED_AT));
 
         assertThat(projects.count()).isZero();
     }
@@ -288,6 +327,55 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$[0].id").value(PROJECT_ID.toString()));
 
         assertThat(projects.count()).isZero();
+    }
+
+    /** GAPS.md G-021: {@code 02} §11, the picker names organizations without calling the Catalogue. */
+    @Test
+    void listingOrganizationsRelaysTheCatalogueAndTouchesNoLocalState() throws Exception {
+        UUID other = UUID.fromString("55555555-5555-5555-5555-555555555555");
+        when(catalogueClient.listOrganizations()).thenReturn(List.of(
+                new CatalogueOrganizationDto(ORGANIZATION_ID.toString(), "Naxos Heritage", "naxos-heritage",
+                        "ACTIVE"),
+                new CatalogueOrganizationDto(other.toString(), "Delos Trust", "delos-trust", "SUSPENDED")));
+
+        mockMvc.perform(authenticated(get("/api/v1/organizations")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(ORGANIZATION_ID.toString()))
+                .andExpect(jsonPath("$[0].name").value("Naxos Heritage"))
+                .andExpect(jsonPath("$[0].slug").value("naxos-heritage"))
+                .andExpect(jsonPath("$[0].status").value("ACTIVE"))
+                .andExpect(jsonPath("$[1].id").value(other.toString()))
+                .andExpect(jsonPath("$[1].status").value("SUSPENDED"));
+
+        verify(catalogueClient).listOrganizations();
+        verifyNoMoreInteractions(catalogueClient);
+        assertThat(projects.count()).isZero();
+    }
+
+    @Test
+    void listingOrganizationsRequiresAToken() throws Exception {
+        mockMvc.perform(get("/api/v1/organizations"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(catalogueClient);
+    }
+
+    @Test
+    void listingOrganizationsReportsTheUpstreamFailure() throws Exception {
+        when(catalogueClient.listOrganizations())
+                .thenThrow(new CatalogueUnavailableException("outage"));
+
+        mockMvc.perform(authenticated(get("/api/v1/organizations")))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentType("application/problem+json"))
+                .andExpect(jsonPath("$.code").value("UPSTREAM_UNAVAILABLE"));
+
+        doThrow(new CatalogueTimeoutException("too slow", null)).when(catalogueClient).listOrganizations();
+
+        mockMvc.perform(authenticated(get("/api/v1/organizations")))
+                .andExpect(status().isGatewayTimeout())
+                .andExpect(jsonPath("$.code").value("UPSTREAM_TIMEOUT"));
     }
 
     // --- Validation output -------------------------------------------------------------------------
@@ -338,7 +426,7 @@ class ProjectLifecycleIntegrationTest extends PostgresIntegrationTest {
     private static CatalogueProjectDto catalogueProject(String name) {
         return new CatalogueProjectDto(PROJECT_ID.toString(), ORGANIZATION_ID.toString(), name,
                 "museum-of-naxos", "ACTIVE",
-                new CatalogueProjectDto.CatalogueToolDto("iguide"));
+                new CatalogueProjectDto.CatalogueToolDto("iguide"), CREATED_AT, UPDATED_AT);
     }
 
     private void givenAnExistingCompanionRow() {

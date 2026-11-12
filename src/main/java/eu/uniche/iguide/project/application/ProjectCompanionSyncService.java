@@ -41,7 +41,7 @@ public class ProjectCompanionSyncService {
         UUID organizationId = requiredUuid(dto.orgId(), "organization id");
         Instant now = Instant.now();
 
-        return repository.findById(projectId)
+        Project companion = repository.findById(projectId)
                 .map(existing -> {
                     existing.applyCatalogueState(
                             organizationId, dto.name(), dto.slug(), dto.status(), now);
@@ -49,6 +49,8 @@ public class ProjectCompanionSyncService {
                 })
                 .orElseGet(() -> repository.save(Project.companionOf(
                         projectId, organizationId, dto.name(), dto.slug(), dto.status(), now)));
+        companion.applyCatalogueTimestamps(dto.createdAtInstant(), dto.updatedAtInstant());
+        return companion;
     }
 
     /**

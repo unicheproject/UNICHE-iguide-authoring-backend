@@ -56,10 +56,12 @@ public abstract class ContentIntegrationTest extends PostgresIntegrationTest {
     @AfterEach
     protected void clean() {
         jdbc.execute("""
+                DELETE FROM project_themes; DELETE FROM project_settings; DELETE FROM project_template_applications;
                 DELETE FROM resource_working_copies;
+                DELETE FROM navigation_item_translations; DELETE FROM navigation_items; DELETE FROM navigations;
                 DELETE FROM resource_assets; DELETE FROM interaction_triggers;
                 DELETE FROM floor_plan_positions; DELETE FROM floor_plans;
-                DELETE FROM asset_translations; DELETE FROM assets;
+                DELETE FROM asset_storage_cleanups; DELETE FROM asset_translations; DELETE FROM assets;
                 DELETE FROM geographic_map_resources; DELETE FROM geographic_maps;
                 DELETE FROM resource_categories; DELETE FROM category_translations; DELETE FROM categories;
                 DELETE FROM guide_block_translations; DELETE FROM guide_blocks;
@@ -174,6 +176,6 @@ public abstract class ContentIntegrationTest extends PostgresIntegrationTest {
 
     private static CatalogueProjectDto catalogueProject(UUID id, String slug) {
         return new CatalogueProjectDto(id.toString(), ORGANIZATION_ID.toString(), slug, slug, "ACTIVE",
-                new CatalogueProjectDto.CatalogueToolDto("iguide"));
+                new CatalogueProjectDto.CatalogueToolDto("iguide"), null, null);
     }
 }

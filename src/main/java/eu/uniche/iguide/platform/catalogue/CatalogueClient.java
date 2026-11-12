@@ -33,6 +33,9 @@ public interface CatalogueClient {
 
     CatalogueOrganizationDto getOrganization(UUID organizationId);
 
+    /** The organizations the Catalogue lets the current subject see. */
+    List<CatalogueOrganizationDto> listOrganizations();
+
     /** Reads the authorization view of the current subject. */
     CatalogueMeAuthorizationDto getMeAuthorization();
 }

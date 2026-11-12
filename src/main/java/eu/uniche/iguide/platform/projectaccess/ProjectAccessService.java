@@ -63,8 +63,8 @@ public class ProjectAccessService implements ProjectAccessGateway {
                 companion.getCatalogueName(),
                 companion.getCatalogueSlug(),
                 companion.getCatalogueStatus(),
-                // The Catalogue does not currently return its own creation and update timestamps for a
-                // Project. The fields stay in the contract for when it does.
+                // The Catalogue's own times, just written to the row from this response (DECISIONS.md
+                // D-039); a value the Catalogue left out keeps the last one it sent.
                 companion.getCatalogueCreatedAt(),
                 companion.getCatalogueUpdatedAt());
     }

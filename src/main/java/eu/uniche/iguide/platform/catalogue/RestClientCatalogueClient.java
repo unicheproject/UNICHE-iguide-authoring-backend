@@ -141,6 +141,15 @@ public class RestClientCatalogueClient implements CatalogueClient {
     }
 
     @Override
+    public List<CatalogueOrganizationDto> listOrganizations() {
+        return callForList(() -> restClient.get()
+                .uri("/api/v1/organisations")
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<CatalogueOrganizationDto>>() {
+                }));
+    }
+
+    @Override
     public CatalogueMeAuthorizationDto getMeAuthorization() {
         return call(() -> restClient.get()
                 .uri("/api/v1/me/authorization")
