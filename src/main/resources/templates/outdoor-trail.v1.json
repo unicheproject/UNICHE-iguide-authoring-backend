@@ -1,0 +1,153 @@
+{
+  "key": "outdoor-trail",
+  "version": 1,
+  "status": "ACTIVE",
+  "name": {
+    "en": "Outdoor trail",
+    "el": "Υπαίθρια διαδρομή"
+  },
+  "description": {
+    "en": "Geo-proximity trails with offline maps, on the web and a mobile app.",
+    "el": "Διαδρομές με ειδοποιήσεις εγγύτητας και χάρτες εκτός σύνδεσης, στο web και σε εφαρμογή κινητού."
+  },
+  "definition": {
+    "supportedSurfaces": [
+      "WEB",
+      "MOBILE"
+    ],
+    "capabilities": [
+      "PAGES",
+      "POI_EXPLORATION",
+      "ROUTES",
+      "GUIDES",
+      "MAPS",
+      "EVENTS",
+      "SEARCH",
+      "OFFLINE_CONTENT",
+      "LOCATION_TRIGGERS",
+      "QR_TRIGGERS",
+      "FEEDBACK"
+    ],
+    "defaultLanguages": [
+      "el",
+      "en"
+    ],
+    "initialCategories": [
+      {
+        "code": "viewpoints",
+        "scope": "POI",
+        "icon": "view",
+        "name": {
+          "en": "Viewpoints",
+          "el": "Σημεία θέας"
+        }
+      },
+      {
+        "code": "easy-walks",
+        "scope": "ROUTE",
+        "icon": "trail",
+        "name": {
+          "en": "Easy walks",
+          "el": "Εύκολοι περίπατοι"
+        }
+      }
+    ],
+    "allowedComponentTypes": [
+      "HERO",
+      "TEXT",
+      "IMAGE",
+      "POI_LIST",
+      "ROUTE_LIST",
+      "MAP"
+    ],
+    "themeValues": {
+      "headingFont": [
+        "ARCHIVO",
+        "SPECTRAL",
+        "BARLOW_CONDENSED",
+        "SPACE_GROTESK",
+        "IBM_PLEX_MONO",
+        "NEWSREADER",
+        "SAIRA_CONDENSED",
+        "SORA",
+        "SYNE",
+        "BALOO_2"
+      ],
+      "bodyFont": [
+        "ARCHIVO",
+        "BARLOW",
+        "IBM_PLEX_SANS",
+        "LIBRE_FRANKLIN",
+        "SORA"
+      ],
+      "cornerRadius": [
+        "SHARP",
+        "SOFT",
+        "ROUND"
+      ],
+      "density": [
+        "COMPACT",
+        "REGULAR",
+        "SPACIOUS"
+      ]
+    },
+    "defaultTheme": {
+      "headingFont": "BARLOW_CONDENSED",
+      "bodyFont": "BARLOW",
+      "primaryColor": "#A8432B",
+      "secondaryColor": "#3F6B4A",
+      "backgroundColor": "#FAF6F0",
+      "textColor": "#1C1410",
+      "cornerRadius": "SHARP",
+      "density": "SPACIOUS"
+    },
+    "stylePresets": [
+      "gallery-house",
+      "quarry-trail",
+      "street-notes",
+      "plate-and-negative",
+      "aegean-network",
+      "foundry-works",
+      "caldera-geopark",
+      "six-nights",
+      "little-digs"
+    ],
+    "defaultStylePreset": "quarry-trail",
+    "shellSchema": {
+      "languageSwitcher": [
+        "HEADER",
+        "FOOTER",
+        "OFF"
+      ],
+      "search": [
+        "HEADER",
+        "OFF"
+      ],
+      "feedback": [
+        "FOOTER",
+        "OFF"
+      ],
+      "mobileMenu": [
+        "BOTTOM_BAR",
+        "BURGER"
+      ],
+      "kioskHome": [
+        "TILES",
+        "HEADER_MENU"
+      ]
+    },
+    "defaultShell": {
+      "languageSwitcher": "HEADER",
+      "search": "HEADER",
+      "feedback": "OFF",
+      "mobileMenu": "BOTTOM_BAR",
+      "kioskHome": "TILES"
+    },
+    "initialPages": [],
+    "initialNavigations": [],
+    "runtimeDefaults": {
+      "WEB": {},
+      "MOBILE": {}
+    }
+  }
+}

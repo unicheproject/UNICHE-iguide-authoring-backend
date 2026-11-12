@@ -1,0 +1,21 @@
+{
+  "key": "six-nights",
+  "name": {
+    "en": "Six Nights",
+    "el": "Έξι νύχτες"
+  },
+  "description": {
+    "en": "Festival programme, dark and loud.",
+    "el": "Πρόγραμμα φεστιβάλ, σκοτεινό και έντονο."
+  },
+  "values": {
+    "headingFont": "SYNE",
+    "bodyFont": "ARCHIVO",
+    "primaryColor": "#FF3B5C",
+    "secondaryColor": "#FFD23F",
+    "backgroundColor": "#111114",
+    "textColor": "#F4F4F6",
+    "cornerRadius": "ROUND",
+    "density": "REGULAR"
+  }
+}

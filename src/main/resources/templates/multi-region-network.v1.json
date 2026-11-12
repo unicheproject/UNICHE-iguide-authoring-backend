@@ -1,0 +1,138 @@
+{
+  "key": "multi-region-network",
+  "version": 1,
+  "status": "ACTIVE",
+  "name": {
+    "en": "Multi-region network",
+    "el": "Δίκτυο πολλών περιοχών"
+  },
+  "description": {
+    "en": "Several sites under one Application, with shared content.",
+    "el": "Πολλοί χώροι σε μία Εφαρμογή, με κοινό περιεχόμενο."
+  },
+  "definition": {
+    "supportedSurfaces": [
+      "WEB",
+      "MOBILE",
+      "KIOSK"
+    ],
+    "capabilities": [
+      "PAGES",
+      "POI_EXPLORATION",
+      "ROUTES",
+      "GUIDES",
+      "MAPS",
+      "FLOOR_PLANS",
+      "EVENTS",
+      "SEARCH",
+      "OFFLINE_CONTENT",
+      "LOCATION_TRIGGERS",
+      "QR_TRIGGERS",
+      "FEEDBACK"
+    ],
+    "defaultLanguages": [
+      "el",
+      "en"
+    ],
+    "initialCategories": [],
+    "allowedComponentTypes": [
+      "HERO",
+      "TEXT",
+      "IMAGE",
+      "POI_LIST",
+      "ROUTE_LIST",
+      "MAP",
+      "EVENT_LIST"
+    ],
+    "themeValues": {
+      "headingFont": [
+        "ARCHIVO",
+        "SPECTRAL",
+        "BARLOW_CONDENSED",
+        "SPACE_GROTESK",
+        "IBM_PLEX_MONO",
+        "NEWSREADER",
+        "SAIRA_CONDENSED",
+        "SORA",
+        "SYNE",
+        "BALOO_2"
+      ],
+      "bodyFont": [
+        "ARCHIVO",
+        "BARLOW",
+        "IBM_PLEX_SANS",
+        "LIBRE_FRANKLIN",
+        "SORA"
+      ],
+      "cornerRadius": [
+        "SHARP",
+        "SOFT",
+        "ROUND"
+      ],
+      "density": [
+        "COMPACT",
+        "REGULAR",
+        "SPACIOUS"
+      ]
+    },
+    "defaultTheme": {
+      "headingFont": "NEWSREADER",
+      "bodyFont": "LIBRE_FRANKLIN",
+      "primaryColor": "#10243F",
+      "secondaryColor": "#9A6B1F",
+      "backgroundColor": "#FBF8F2",
+      "textColor": "#10243F",
+      "cornerRadius": "SOFT",
+      "density": "REGULAR"
+    },
+    "stylePresets": [
+      "gallery-house",
+      "quarry-trail",
+      "street-notes",
+      "plate-and-negative",
+      "aegean-network",
+      "foundry-works",
+      "caldera-geopark",
+      "six-nights",
+      "little-digs"
+    ],
+    "defaultStylePreset": "aegean-network",
+    "shellSchema": {
+      "languageSwitcher": [
+        "HEADER",
+        "FOOTER",
+        "OFF"
+      ],
+      "search": [
+        "HEADER",
+        "OFF"
+      ],
+      "feedback": [
+        "FOOTER",
+        "OFF"
+      ],
+      "mobileMenu": [
+        "BOTTOM_BAR",
+        "BURGER"
+      ],
+      "kioskHome": [
+        "TILES",
+        "HEADER_MENU"
+      ]
+    },
+    "defaultShell": {
+      "languageSwitcher": "HEADER",
+      "search": "HEADER",
+      "feedback": "FOOTER",
+      "mobileMenu": "BURGER",
+      "kioskHome": "TILES"
+    },
+    "initialPages": [],
+    "initialNavigations": [],
+    "runtimeDefaults": {
+      "WEB": {},
+      "MOBILE": {},
+      "KIOSK": {}
+    }
+  }
+}

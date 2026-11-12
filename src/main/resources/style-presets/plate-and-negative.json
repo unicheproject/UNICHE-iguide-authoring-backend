@@ -1,0 +1,21 @@
+{
+  "key": "plate-and-negative",
+  "name": {
+    "en": "Plate & Negative",
+    "el": "Πλάκα και αρνητικό"
+  },
+  "description": {
+    "en": "Photo archive where the catalogue number matters.",
+    "el": "Φωτογραφικό αρχείο όπου μετρά ο αριθμός καταλόγου."
+  },
+  "values": {
+    "headingFont": "IBM_PLEX_MONO",
+    "bodyFont": "IBM_PLEX_SANS",
+    "primaryColor": "#16181D",
+    "secondaryColor": "#8A5A2B",
+    "backgroundColor": "#F5F4F1",
+    "textColor": "#16181D",
+    "cornerRadius": "SHARP",
+    "density": "REGULAR"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "key": "gallery-house",
+  "name": {
+    "en": "Gallery House",
+    "el": "Γκαλερί"
+  },
+  "description": {
+    "en": "Museum collections, Web and Kiosk together.",
+    "el": "Μουσειακές συλλογές, Web και Kiosk μαζί."
+  },
+  "values": {
+    "headingFont": "SPECTRAL",
+    "bodyFont": "ARCHIVO",
+    "primaryColor": "#4C1D8B",
+    "secondaryColor": "#B4235A",
+    "backgroundColor": "#FFFFFF",
+    "textColor": "#030712",
+    "cornerRadius": "SOFT",
+    "density": "REGULAR"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "key": "street-notes",
+  "name": {
+    "en": "Street Notes",
+    "el": "Σημειώσεις δρόμου"
+  },
+  "description": {
+    "en": "Urban walk, dense and high contrast.",
+    "el": "Αστικός περίπατος, πυκνός και με υψηλή αντίθεση."
+  },
+  "values": {
+    "headingFont": "SPACE_GROTESK",
+    "bodyFont": "IBM_PLEX_SANS",
+    "primaryColor": "#0B0B0C",
+    "secondaryColor": "#4D7C0F",
+    "backgroundColor": "#FFFFFF",
+    "textColor": "#0B0B0C",
+    "cornerRadius": "SHARP",
+    "density": "COMPACT"
+  }
+}

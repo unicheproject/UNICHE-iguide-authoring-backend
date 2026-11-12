@@ -1,0 +1,158 @@
+{
+  "key": "museum-multi-surface",
+  "version": 1,
+  "status": "ACTIVE",
+  "name": {
+    "en": "Museum multi-surface",
+    "el": "Μουσείο πολλαπλών επιφανειών"
+  },
+  "description": {
+    "en": "Galleries, routes and QR codes for indoor collections, on the web and a lobby kiosk.",
+    "el": "Αίθουσες, διαδρομές και κωδικοί QR για εσωτερικές συλλογές, στο web και σε kiosk στην είσοδο."
+  },
+  "definition": {
+    "supportedSurfaces": [
+      "WEB",
+      "KIOSK"
+    ],
+    "capabilities": [
+      "PAGES",
+      "POI_EXPLORATION",
+      "ROUTES",
+      "GUIDES",
+      "MAPS",
+      "FLOOR_PLANS",
+      "EVENTS",
+      "SEARCH",
+      "OFFLINE_CONTENT",
+      "QR_TRIGGERS",
+      "FEEDBACK"
+    ],
+    "defaultLanguages": [
+      "el",
+      "en"
+    ],
+    "initialCategories": [
+      {
+        "code": "highlights",
+        "scope": "POI",
+        "icon": "statue",
+        "name": {
+          "en": "Highlights",
+          "el": "Κορυφαία εκθέματα"
+        },
+        "description": {
+          "en": "The works not to miss.",
+          "el": "Τα έργα που δεν πρέπει να χάσετε."
+        }
+      },
+      {
+        "code": "family-route",
+        "scope": "ROUTE",
+        "icon": "family",
+        "name": {
+          "en": "Family routes",
+          "el": "Διαδρομές για οικογένειες"
+        }
+      }
+    ],
+    "allowedComponentTypes": [
+      "HERO",
+      "TEXT",
+      "IMAGE",
+      "POI_LIST",
+      "ROUTE_LIST",
+      "MAP",
+      "EVENT_LIST"
+    ],
+    "themeValues": {
+      "headingFont": [
+        "ARCHIVO",
+        "SPECTRAL",
+        "BARLOW_CONDENSED",
+        "SPACE_GROTESK",
+        "IBM_PLEX_MONO",
+        "NEWSREADER",
+        "SAIRA_CONDENSED",
+        "SORA",
+        "SYNE",
+        "BALOO_2"
+      ],
+      "bodyFont": [
+        "ARCHIVO",
+        "BARLOW",
+        "IBM_PLEX_SANS",
+        "LIBRE_FRANKLIN",
+        "SORA"
+      ],
+      "cornerRadius": [
+        "SHARP",
+        "SOFT",
+        "ROUND"
+      ],
+      "density": [
+        "COMPACT",
+        "REGULAR",
+        "SPACIOUS"
+      ]
+    },
+    "defaultTheme": {
+      "headingFont": "SPECTRAL",
+      "bodyFont": "ARCHIVO",
+      "primaryColor": "#4C1D8B",
+      "secondaryColor": "#B4235A",
+      "backgroundColor": "#FFFFFF",
+      "textColor": "#030712",
+      "cornerRadius": "SOFT",
+      "density": "REGULAR"
+    },
+    "stylePresets": [
+      "gallery-house",
+      "quarry-trail",
+      "street-notes",
+      "plate-and-negative",
+      "aegean-network",
+      "foundry-works",
+      "caldera-geopark",
+      "six-nights",
+      "little-digs"
+    ],
+    "defaultStylePreset": "gallery-house",
+    "shellSchema": {
+      "languageSwitcher": [
+        "HEADER",
+        "FOOTER",
+        "OFF"
+      ],
+      "search": [
+        "HEADER",
+        "OFF"
+      ],
+      "feedback": [
+        "FOOTER",
+        "OFF"
+      ],
+      "mobileMenu": [
+        "BOTTOM_BAR",
+        "BURGER"
+      ],
+      "kioskHome": [
+        "TILES",
+        "HEADER_MENU"
+      ]
+    },
+    "defaultShell": {
+      "languageSwitcher": "HEADER",
+      "search": "HEADER",
+      "feedback": "FOOTER",
+      "mobileMenu": "BOTTOM_BAR",
+      "kioskHome": "TILES"
+    },
+    "initialPages": [],
+    "initialNavigations": [],
+    "runtimeDefaults": {
+      "WEB": {},
+      "KIOSK": {}
+    }
+  }
+}

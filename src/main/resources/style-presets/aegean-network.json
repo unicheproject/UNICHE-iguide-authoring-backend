@@ -1,0 +1,21 @@
+{
+  "key": "aegean-network",
+  "name": {
+    "en": "Aegean Network",
+    "el": "Δίκτυο Αιγαίου"
+  },
+  "description": {
+    "en": "Many sites under one institution.",
+    "el": "Πολλοί χώροι υπό έναν φορέα."
+  },
+  "values": {
+    "headingFont": "NEWSREADER",
+    "bodyFont": "LIBRE_FRANKLIN",
+    "primaryColor": "#10243F",
+    "secondaryColor": "#9A6B1F",
+    "backgroundColor": "#FBF8F2",
+    "textColor": "#10243F",
+    "cornerRadius": "SOFT",
+    "density": "REGULAR"
+  }
+}

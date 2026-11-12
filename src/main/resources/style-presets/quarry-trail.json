@@ -1,0 +1,21 @@
+{
+  "key": "quarry-trail",
+  "name": {
+    "en": "Quarry Trail",
+    "el": "Μονοπάτι λατομείου"
+  },
+  "description": {
+    "en": "Outdoor site read in sunlight.",
+    "el": "Υπαίθριος χώρος, ευανάγνωστος στον ήλιο."
+  },
+  "values": {
+    "headingFont": "BARLOW_CONDENSED",
+    "bodyFont": "BARLOW",
+    "primaryColor": "#A8432B",
+    "secondaryColor": "#3F6B4A",
+    "backgroundColor": "#FAF6F0",
+    "textColor": "#1C1410",
+    "cornerRadius": "SHARP",
+    "density": "SPACIOUS"
+  }
+}

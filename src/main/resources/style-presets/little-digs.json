@@ -1,0 +1,21 @@
+{
+  "key": "little-digs",
+  "name": {
+    "en": "Little Digs",
+    "el": "Μικροί ανασκαφείς"
+  },
+  "description": {
+    "en": "Family and school audiences.",
+    "el": "Για οικογένειες και σχολεία."
+  },
+  "values": {
+    "headingFont": "BALOO_2",
+    "bodyFont": "BARLOW",
+    "primaryColor": "#14795A",
+    "secondaryColor": "#C2410C",
+    "backgroundColor": "#FFFDF7",
+    "textColor": "#14261F",
+    "cornerRadius": "ROUND",
+    "density": "SPACIOUS"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "key": "foundry-works",
+  "name": {
+    "en": "Foundry Works",
+    "el": "Χυτήριο"
+  },
+  "description": {
+    "en": "Industrial heritage, machine-first.",
+    "el": "Βιομηχανική κληρονομιά, με πρώτη τη μηχανή."
+  },
+  "values": {
+    "headingFont": "SAIRA_CONDENSED",
+    "bodyFont": "ARCHIVO",
+    "primaryColor": "#1C1917",
+    "secondaryColor": "#B45309",
+    "backgroundColor": "#FAF8F6",
+    "textColor": "#1C1917",
+    "cornerRadius": "SOFT",
+    "density": "COMPACT"
+  }
+}

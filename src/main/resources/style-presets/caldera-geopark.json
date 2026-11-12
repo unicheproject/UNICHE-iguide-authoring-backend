@@ -1,0 +1,21 @@
+{
+  "key": "caldera-geopark",
+  "name": {
+    "en": "Caldera Geopark",
+    "el": "Γεωπάρκο καλντέρας"
+  },
+  "description": {
+    "en": "Geology trails over a wide area.",
+    "el": "Γεωλογικά μονοπάτια σε ευρεία περιοχή."
+  },
+  "values": {
+    "headingFont": "SORA",
+    "bodyFont": "SORA",
+    "primaryColor": "#232B2B",
+    "secondaryColor": "#8C6410",
+    "backgroundColor": "#F7F5F0",
+    "textColor": "#232B2B",
+    "cornerRadius": "ROUND",
+    "density": "SPACIOUS"
+  }
+}
