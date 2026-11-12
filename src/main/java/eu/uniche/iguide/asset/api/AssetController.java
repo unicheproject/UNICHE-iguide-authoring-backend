@@ -14,6 +14,7 @@ import eu.uniche.iguide.platform.web.PageResponse;
 import eu.uniche.iguide.resource.api.ChangeStatusRequest;
 import eu.uniche.iguide.resource.domain.ResourceReference;
 import eu.uniche.iguide.resource.domain.ResourceStatus;
+import eu.uniche.iguide.translation.application.AssetTranslationUseCase;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
@@ -46,16 +47,18 @@ public class AssetController {
     private final UpdateAssetUseCase updateAsset;
     private final ChangeAssetStatusUseCase changeStatus;
     private final ReplaceAssetFileUseCase replaceFile;
+    private final AssetTranslationUseCase assetTranslations;
 
     public AssetController(ListAssetsQuery listAssets, GetAssetQuery getAsset, UploadAssetUseCase uploadAsset,
                            UpdateAssetUseCase updateAsset, ChangeAssetStatusUseCase changeStatus,
-                           ReplaceAssetFileUseCase replaceFile) {
+                           ReplaceAssetFileUseCase replaceFile, AssetTranslationUseCase assetTranslations) {
         this.listAssets = listAssets;
         this.getAsset = getAsset;
         this.uploadAsset = uploadAsset;
         this.updateAsset = updateAsset;
         this.changeStatus = changeStatus;
         this.replaceFile = replaceFile;
+        this.assetTranslations = assetTranslations;
     }
 
     @GetMapping
@@ -96,14 +99,14 @@ public class AssetController {
     @PutMapping("/{assetId}/translations/{language}")
     public AssetResponse translate(@PathVariable UUID projectId, @PathVariable UUID assetId,
                                    @PathVariable String language, @Valid @RequestBody AssetRequests.Translate request) {
-        return AssetResponse.from(updateAsset.translate(projectId, assetId, CurrentPrincipal.require(), request.version(),
-                language, request.toInput()));
+        return AssetResponse.from(assetTranslations.put(projectId, assetId, CurrentPrincipal.require(),
+                request.version(), language, request.toInput()));
     }
 
     @DeleteMapping("/{assetId}/translations/{language}")
     public AssetResponse clearTranslation(@PathVariable UUID projectId, @PathVariable UUID assetId,
                                           @PathVariable String language, @RequestParam(required = false) Long version) {
-        return AssetResponse.from(updateAsset.translate(projectId, assetId, CurrentPrincipal.require(), version,
+        return AssetResponse.from(assetTranslations.put(projectId, assetId, CurrentPrincipal.require(), version,
                 language, null));
     }
 

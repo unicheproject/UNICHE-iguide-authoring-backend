@@ -621,3 +621,472 @@ Append-only. An entry is never edited or removed; a later entry supersedes it by
 - Alternatives: one implementation per kind (rejected: six copies of the rules the handlers already hold).
 - Affected specs: `07` §14; `12` §3 Translation workspace, §7.
 
+## D-032 (2026-10-23) — Translation endpoints of Route Stops, Guide Blocks, and Assets
+
+- Type: spec-interpretation (owner request 2026-10-23, next item of the to-do list)
+- Decision: `PUT` and `DELETE` on `/routes/{id}/stops/{stopId}/translations/{lang}`,
+  `/guides/{id}/blocks/{blockId}/translations/{lang}` (`07` §14 child paths), and `/assets/{id}/translations/{lang}`
+  (`assets` is a `{kind}` like any other, `07` §14). Interpretations:
+  - Stops and Blocks follow D-031: the child is found by its id in the parent's state (the working copy for an
+    ACTIVE parent), its language replaced or emptied, and the parent's own write validates and stores it, rich text
+    and INLINE images included; `version` and `X-Working-Copy-Version` are the parent's; the response is the
+    parent's read DTO; a child that exists only in the copy has no id yet and cannot be addressed (`404`);
+  - Assets are edited in place while not archived (D-025): the path writes one language and keeps the name, the
+    decorative flag, and the other languages; the activation rule on alternative text still applies to an ACTIVE
+    image; the body is the texts plus `version`, the response the Asset's read DTO;
+  - every path checks the language (`422 UNKNOWN_LANGUAGE`) and refuses to empty the default one
+    (`422 DEFAULT_LANGUAGE`).
+- Why: G-026; the Translation workspace of `12` §3 translates stops, blocks, and media texts as well.
+- Affected specs: `07` §14; `12` §3 Translation workspace, Media library.
+
+## D-033 (2026-10-23) — Readiness
+
+- Type: spec-interpretation (owner request 2026-10-23, next item of the to-do list)
+- Decision: `GET /api/v1/projects/{p}/readiness` (`07` §14) returns `{activatable, blocking, warnings}` with items
+  `{resourceType, resourceId, title, languageCode, path, code}`, computed on request in one read-only transaction
+  from the live rows. One `ReadinessCheck` per kind lives in that kind's package; only `ACTIVE` Resources are
+  evaluated. Interpretations:
+  - `path` is the field path the CMS editors use (`translations.el.title`, `blocks[0].translations.en.text`,
+    `stops[1].poiId`, `placements[2]`, `surfaces`, `workingCopy`), so the form can point at the field;
+    `resourceType` is `PLACE`, `POI`, `ROUTE`, `GUIDE`, `EVENT`, `CATEGORY`, `MAP`, `FLOOR_PLAN`, `ASSET`, or
+    `PROJECT`; `title` is the default-language title or name, or an Asset's, map's, or plan's internal name;
+  - blocking `MISSING_DEFAULT_LANGUAGE_VALUE`: the title (Categories: name) in the default language; a Guide
+    without blocks (`blocks`) or a TEXT block without text;
+  - blocking `MISSING_ALTERNATIVE_TEXT`: an ACTIVE non-decorative image without default-language alternative text;
+  - blocking `NO_SURFACE_ENABLED`; warning `PUBLIC_BASE_URL_MISSING` while WEB is enabled without an address;
+  - blocking `DANGLING_REFERENCE`: an ACTIVE Resource pointing at a missing or archived one (a Route stop's POI, a
+    Guide reference block's target, an Event's Place, POI, or Route, a map placement, a floor-plan position);
+    a DRAFT target is not dangling, it is reported by the Route rule below where it matters;
+  - Routes (G-030): blocking `ROUTE_WITHOUT_ACTIVE_STOP` and warning `ROUTE_FEW_STOPS`, outside the closed lists,
+    proposed in QUESTIONS.md Q-017;
+  - warning `MISSING_TRANSLATION`: a text the CMS counts that is filled in the default language and empty in
+    another enabled language, per field; the Guide story is its first TEXT block;
+  - warning `MISSING_ACCESSIBILITY_INFORMATION` for ACTIVE Places and POIs in every enabled language (`14` §2);
+    accessibility information then gets no `MISSING_TRANSLATION` of its own, so a field is not reported twice;
+  - warning `MISSING_TRANSCRIPT`: an audio or video Asset bound to ACTIVE content without a default transcript;
+  - warning `PENDING_WORKING_COPY` for every working copy;
+  - not produced yet (G-036): `TEMPLATE_VALIDATION_FAILED`, `THEME_CONTRAST_FAILED`, `MISSING_CAPTION_TRACK`,
+    `MAP_WITHOUT_POI_LIST`, `CAPABILITY_DISABLED`, `UNREACHABLE_PAGE`, `AI_OUTPUT_UNREVIEWED`;
+  - items are ordered Project first, then by kind, title, and path, so the answer does not depend on check order.
+- Why: Milestone 8; `12` §5 makes readiness the single source of "what is missing" for the Dashboard, activation,
+  and the form.
+- Alternatives: stored readiness (rejected: `07` §14 computes on request); per-row queries (rejected: one bulk
+  query per kind).
+- Affected specs: `03` §1, §2; `07` §14; `08` Milestone 8; `12` §3, §5; `14` §2.
+
+## D-034 (2026-10-26) — RFC 7807 problem details and the platform correlation header
+
+- Type: spec-interpretation (owner request 2026-10-26, next item of the to-do list; part of M0a)
+- Decision: every error is an RFC 7807 problem details body served as `application/problem+json` (`07` §15,
+  [ARC_7.9]); every response carries `X-UNICHE-Request-Id` (`10` §8). Interpretations:
+  - members: `type` = `urn:uniche:iguide:problem:<code>`, `title` (the code in words, the same for every
+    occurrence, as RFC 7807 asks), `status`, `detail` (this occurrence), `code`, `requestId`, and when present
+    `errors[{path, code, message}]`, `currentVersion` (`VERSION_CONFLICT`), `references` (`RESOURCE_IN_USE`);
+    the codes are the ones already in use;
+  - on `VERSION_CONFLICT`, `modifiedBySubjectDisplayName` and `modifiedAt` are present and null until Audit
+    Events exist (G-023); `conflictingFields` is omitted, as `07` §15 allows where it is not computed, and the
+    CMS compares the values itself;
+  - framework failures share the body: unreadable body `400 MALFORMED_REQUEST`, unknown path
+    `404 RESOURCE_NOT_FOUND`, `405 METHOD_NOT_ALLOWED`, `415 UNSUPPORTED_MEDIA_TYPE`, `500 INTERNAL_ERROR`, and
+    Spring Security's `401 UNAUTHENTICATED` (keeping `WWW-Authenticate: Bearer`) and `403 FORBIDDEN`;
+  - `X-UNICHE-Request-Id` is echoed when the client sends a safe value, else generated; `X-Request-Id` is
+    accepted inbound as an alias and no longer sent back; CORS allows both inbound and exposes
+    `X-UNICHE-Request-Id`; Catalogue calls carry `X-UNICHE-Request-Id` and `X-Correlation-Id` (D-012);
+  - `qr.png` also declares `application/problem+json`, so its errors can be written to an image client.
+- Why: G-001, G-002; the CMS matches on `code` and reads `errors` by path.
+- Alternatives: Spring's `ProblemDetail` type (rejected: the existing envelope keeps the extension members and
+  the no-rejected-value rule in one place).
+- Affected specs: `07` §5, §15; `10` §8; `08` Milestone 0.
+
+
+## D-035 (2026-10-26) — MuseMind translation through a backend port, with a labelled mock
+
+- Type: spec-interpretation (owner request 2026-10-26, to-do item "MuseMind AI translation, AI markers, and 'mark
+  reviewed'"; owner choice: all of it, against a mock gateway; first slice of Milestone 13)
+- Decision: the backend calls the UnicheAIGateway, never the CMS (AGENTS.md §4 rule 3; answers the first point of
+  `09` §16 for now, QUESTIONS.md Q-018). Interpretations:
+  - port `TranslationGateway` (package `ai`), adapter chosen by `iguide.ai.gateway.mode` (`IGUIDE_AI_GATEWAY_MODE`):
+    `disabled` (default; every call `503 AI_GATEWAY_UNAVAILABLE`) or `mock` (`musemind-mock`: the text prefixed with
+    `[MuseMind mock · <src>→<tgt>] `, a `mock-<uuid>` request id, no citations). The startup check refuses `mock`
+    under the `prod` profile and any other value; `compose.yaml` and the test profile use `mock`. The real adapter
+    reports `AVAILABLE` and waits for the gateway API (G-037). `GET /api/v1/ai/status` → `{translation}`;
+  - `POST .../{kind}/{id}/translations/{lang}:translate`, body `{version, workingCopyVersion?}`: the non-blank
+    default-language texts of the Resource as the workspace shows them (its working copy's when it has one) are
+    translated and written like `PUT .../translations/{lang}` (D-031: same response and `X-Working-Copy-Version`);
+    texts the default language lacks keep the target's own. `422 DEFAULT_LANGUAGE` for the default language,
+    `422 NOTHING_TO_TRANSLATE` (path `translations.<default>`) when it has no text;
+  - provenance in the `03` §1 shape, `function: "translate"`, `generatedAt` and `reviewedAt` as ISO instants; a
+    DRAFT's on the live row, an ACTIVE Resource's in the working copy's new `translation_provenance` column
+    (changeset 0036, language → provenance, `null` clearing it), written to the rows on apply and dropped on discard.
+    It is written in SQL so the copy's `version` does not move;
+  - `POST .../translations/{lang}:mark-reviewed` (no body, no version: no text changes) sets `reviewedBySubject` and
+    `reviewedAt` on the provenance the workspace shows (the copy's when it carries the language, else the row's);
+    `404` when that is not `AI_GENERATED`; an already reviewed one stays as it is. Response `{resourceType,
+    resourceId, languageCode, provenance, pending}`;
+  - a person's `PUT .../translations/{lang}` that changes the language's text (trimmed, blank as absent) reviews an
+    unreviewed machine translation (`03` §1); for an ACTIVE Resource the reviewed provenance goes into the copy and
+    reaches the row on apply. `DELETE .../translations/{lang}` drops the language's provenance. Editor saves of the
+    whole Resource and of working copies leave provenance as it is: review stays explicit there;
+  - `GET /api/v1/projects/{p}/ai-provenance`: every `AI_GENERATED` entry, live rows and copy entries (`pending:
+    true`); a language can have one of each;
+  - readiness warning `AI_OUTPUT_UNREVIEWED` at `translations.<lang>` for ACTIVE Resources whose live row in an
+    enabled language is unreviewed.
+- Scope: the Resource's own texts of the six kinds; Route Stops, Guide Blocks (the story's rich text), and Assets
+  carry no provenance yet; no `CONTENT_REVIEWED` Audit Event (Milestone 7); provenance reaches no visitor (G-037).
+- Why: the to-do item and `12` §3 need the action now; the gateway API does not exist (`09` §16, `08` Milestone 13).
+- Alternatives: the CMS calling the gateway with the user's token (rejected: AGENTS.md rule 3, and provenance must
+  be written where the text is); a feature flag instead of a mode (rejected: the mode names the adapter and lets the
+  CMS tell the mock apart).
+- Affected specs: `03` §1; `07` §14; `09` §16; `12` §3; `08` Milestone 13.
+
+## D-036 (2026-10-26) — MuseMind for Route Stops, Guide Blocks (the story's rich text), and Assets
+
+- Type: spec-interpretation (owner request 2026-10-26, to-do item "AI translation of Route stops, Guide blocks,
+  Assets, and the Guide story"; follow-up of D-035, same mock gateway)
+- Decision: `:translate` and `:mark-reviewed` reach every translation row the Translation workspace edits, on the
+  paths of their translation endpoints (D-032). Interpretations:
+  - `POST .../routes/{r}/stops/{s}/translations/{lang}:translate` and `.../guides/{g}/blocks/{b}/translations/{lang}:
+    translate`, body `{version, workingCopyVersion?}` of the Route or Guide, response its read DTO with
+    `X-Working-Copy-Version` after a write into its copy (as D-031/D-032); the source is the child as the workspace
+    shows it (the copy's when there is one); an unknown child is `404`; `422 NOTHING_TO_TRANSLATE` at
+    `stops[i].translations.<default>` / `blocks[i]...`;
+  - `POST .../assets/{a}/translations/{lang}:translate`, body `{version}` of the Asset, response the Asset; in place,
+    since Assets have no working copy (G-034);
+  - `:mark-reviewed` on the same paths, no body; response `{resourceType, resourceId, parentType, parentId,
+    languageCode, provenance, pending}` with `resourceType` `ROUTE_STOP` / `GUIDE_BLOCK` / `ASSET` and the Route or
+    Guide as parent (`null` for an Asset, and for a Resource's own texts); `GET .../ai-provenance` entries gain the
+    same two fields;
+  - rich text: every node with text is sent as its own gateway field (`text.<i>`), and the translation keeps the
+    source's nodes (type, level) with the translated texts; `asset` (image) nodes are kept as they are. A Guide
+    Block's caption is a plain field;
+  - provenance lives on the child's or Asset's translation row; for an ACTIVE Route or Guide the copy's
+    `translation_provenance` carries it under `stops/<stopId>/<lang>` or `blocks/<blockId>/<lang>` (own texts keep
+    the language as key; no changeset) and apply writes it to the row of that id. A stop or block the apply
+    recreates (its Point of Interest changed) has a new id and loses it (G-037);
+  - review as D-035: a person's `PUT` of a stop's, block's (rich text compared node by node, blank nodes ignored),
+    or Asset's language that changes its text reviews an unreviewed machine translation; `DELETE` drops the
+    provenance; editor saves of the whole Resource, its working copy, or the whole Asset leave it alone;
+  - readiness `AI_OUTPUT_UNREVIEWED`: on the ACTIVE Route or Guide at `stops[i].translations.<lang>` /
+    `blocks[i].translations.<lang>` (live order), on an ACTIVE Asset at `translations.<lang>`.
+- Why: the to-do item; `03` §1 asks provenance of every machine-written text, `12` §3 the action on every cell of the
+  workspace.
+- Alternatives: one call translating a whole Route or Guide with its children (rejected: one row, one provenance,
+  one request id; the CMS chains the calls); flattening rich text into one string (rejected: loses the node structure
+  and image positions).
+- Affected specs: `03` §1, §11; `07` §14; `09` §16; `12` §3; `08` Milestone 13.
+
+## D-037 (2026-10-27) — Apply refuses changes that would add blocking readiness issues
+
+- Type: spec-interpretation (owner decision 2026-10-27, to-do A39; spec question Q-019)
+- Decision: `POST .../{kind}/{id}/working-copy:apply` validates the payload like a normal save (`03` §1) and, in the
+  same transaction, compares the Project's blocking readiness issues before and after the write (`14` §2: "Blocking
+  issues prevent ... application of a working copy"). When the write adds a blocking issue the Project did not have,
+  the apply answers `422 VALIDATION_ERROR` and rolls back; the live rows and the copy stay as they were.
+  Interpretations:
+  - only new issues count, so an apply may fix issues, and issues elsewhere (such as `NO_SURFACE_ENABLED`) never trap
+    an author;
+  - issues are compared as multisets keyed by Resource, language, code, and path with list indexes dropped: moving a
+    stop does not make its existing finding new, a second finding of the same kind is;
+  - each new issue is one error item with the readiness code (`ROUTE_WITHOUT_ACTIVE_STOP`, `MISSING_DEFAULT_LANGUAGE_VALUE`,
+    `DANGLING_REFERENCE`, `MISSING_ALTERNATIVE_TEXT`, ...) at the issue's path when it concerns the applied Resource
+    (the CMS form paths), else at an empty path with a message naming the other Resource;
+  - the evaluation is `GetReadinessQuery.evaluate`, the same one `GET .../readiness` uses, run inside the apply's
+    transaction after a flush (`workingcopy/application/ApplyReadinessGate`).
+- Why: an ACTIVE Route could be applied with no ACTIVE stop, and an ACTIVE Resource without its default-language
+  title, although activation refuses both.
+- Alternatives: re-running each kind's activation rules on apply (rejected: duplicates readiness and misses
+  references); refusing on any blocking issue (rejected: an unrelated Project-level issue would block every apply).
+- Affected specs: `03` §1; `07` §14; `14` §2.
+
+
+## D-038 (2026-10-30) — Guide readiness covers every block; an image alone fills a text block
+
+- Type: spec-alignment (to-do A42, found by the CMS on 2026-10-27, frontend D-031; `03` §11: the story is ordered
+  blocks, text or reference; `03` §1 readiness)
+- Decision:
+  - `GuideReadiness` warns `MISSING_TRANSLATION` at `blocks[i].translations.<lang>.text` for every TEXT block, not
+    only the first, which had stood for the single story the CMS once edited (D-022);
+  - a REFERENCE block's caption is optional; once the default language has one, every other enabled language
+    without it warns at `blocks[i].translations.<lang>.caption`;
+  - a TEXT block counts as written in a language when it holds non-blank text or an `asset` node
+    (`RichText.hasContent`), so a block that is only an image no longer refuses activation (`422` "Text or an
+    image is required") nor blocks readiness.
+- Why: the story is several blocks since 2026-10-01; translators saw nothing missing past the first block, and an
+  image between two paragraphs could not stand alone.
+- Alternatives: requiring a caption on every reference (rejected: `03` §11 makes it optional).
+- Evidence: TRACEABILITY.md R24.
+- Affected specs: `03` §1, §11.
+
+## D-039 (2026-11-03) — Organizations passthrough and the Catalogue's Project timestamps
+
+- Type: implementation (owner-instructed 2026-11-03, to-do A47, ahead of the rest of M1c; `02` §4, §9, §11; `07` §2,
+  §5, §14)
+- Decision:
+  - `GET /api/v1/organizations` relays the Catalogue's `GET /api/v1/organisations` with the caller's token through
+    `CatalogueClient.listOrganizations` (client-wide status mapping, an empty body is an empty list) and
+    `project/application/ListOrganizationsPassthroughQuery`. It reads and writes no local state; the answer is our
+    own `OrganizationResponse` `{id, name, slug, status}` in the Catalogue's order and filtering (the
+    organizations the caller manages or belongs to, all of them for a platform admin). The class sits in `project`
+    next to the organization Project listings, not in `platform.organization`, which holds the snapshots slated for
+    removal (G-006);
+  - `CatalogueProjectDto` reads `createdAt` and `updatedAt` (the Catalogue's `date-time`, live OpenAPI 2026-11-03)
+    as strings and parses them leniently (`CatalogueTimestamps`: ISO instant or offset; without an offset read as
+    UTC); a missing or unparseable value is `null` and never fails a read;
+  - the companion upsert writes them to `catalogue_created_at` / `catalogue_updated_at` (columns since changeset
+    group 01); a value the Catalogue left out keeps the stored one. `AccessibleProject`, `ProjectView` (every
+    factory), and `ProjectResponse` carry them as `createdAt` / `updatedAt` (`Instant`, ISO-8601 UTC in JSON,
+    `null` when unknown): from the companion row on reads and writes, from the Catalogue body on listings;
+  - the dates are the Catalogue's times for the Project, never those of the companion row.
+- Why: the CMS Project picker and Dashboard showed "Organisation 5d1e7a52" and "—" for Created / Last updated.
+- Alternatives: the CMS calling the Catalogue directly (rejected: `02` §11 routes it through this backend);
+  exposing `CatalogueOrganizationDto` as `/me/authorization` does (rejected: `07` §2 asks for our own response
+  DTO); refusing a Project with a bad timestamp (rejected: display data must not cause an outage).
+- Evidence: TRACEABILITY.md R25. Closes GAPS.md G-016 and G-021.
+- Affected specs: none.
+
+## D-040 (2026-11-04) — Templates, style presets, and Project initialization (M2a and M2i)
+
+- Type: implementation and spec-interpretation (owner-instructed 2026-11-04: the CMS "Create a Project" steps 2 and
+  3 and "resume initialization"; `04` §1–12, §15; `08` Milestone 2; `07` §8, §14, §15; `03` §2–3; `09` §19, §20;
+  `12` §3, §4)
+- Decision:
+  - seeding: `src/main/resources/templates/{key}.v{version}.json` (`museum-multi-surface`, `outdoor-trail`,
+    `multi-region-network`, all v1 and `ACTIVE`, the names `04` §15 gives; the mockup's "Outdoor trail v2" is not
+    followed) and `src/main/resources/style-presets/{key}.json` (the nine presets of the prototype; the mockup's
+    "Caldera Geopark" spelling) are read strictly (unknown member or value, missing member: startup fails) and
+    validated together (`TemplateFileValidator`: surfaces, capabilities, known default languages, initial Category
+    codes and icons, presets exist and use only `themeValues`, every preset and `defaultTheme` passes the contrast
+    rules, `shellSchema` lists exactly the five shell keys and `defaultShell` sets each, `runtimeDefaults` only for
+    supported surfaces and only keys the surfaces endpoint accepts, `initialPages`/`initialNavigations` empty until
+    M6). `TemplateSeeder` runs as a `SmartInitializingSingleton`, after Liquibase and before the web server accepts
+    requests, in one transaction;
+  - checksum: SHA-256 of the canonical JSON (keys sorted, no whitespace) of the Template's `definition`, and of a
+    preset's `values`, so line endings and indentation of a checkout do not count. A changed checksum on a version
+    with a `project_template_applications` row, or on a preset a `project_themes` row uses, fails startup; on an
+    unused one the row is rewritten. `status`, `name`, and `description` are outside the checksum, so a version is
+    deprecated or retitled in the file (`04` §15) (QUESTIONS.md Q-021). A Template's id is a name-based UUID of
+    `iguide:template:{key}:v{version}` (`TemplateSeeder.templateId`), equal in every environment. Rows whose file is
+    removed stay;
+  - schema (changesets 0037–0041 in group 2, 0042 in group 3 for the logo foreign keys, because `assets` is created
+    after group 2): `application_templates` (`template_key`, since `key` is the spec name, not a good column),
+    `style_presets` (`preset_values`), `project_template_applications` (unique `project_id`, snapshot of key,
+    version, names, checksum, and definition), `project_settings`, `project_themes` (typed columns, `#RRGGBB` and
+    enum checks, composite `(project_id, asset_id)` foreign keys to `assets`). No `previewAssetId` (no platform
+    Asset store; preview metadata waits), no preset `status`. No Row-Level Security: no table has a policy yet
+    (G-009);
+  - `GET /api/v1/templates` lists the `ACTIVE` versions (key ascending, version descending) as
+    `{templates: [...]}`; `GET /api/v1/templates/{templateId}` returns any status or `404 RESOURCE_NOT_FOUND`.
+    `name`, `description`, preset and initial Category names follow `Accept-Language` (exact tag, then primary
+    language, then `en`); the response carries the offered presets with every value a tile needs, a `suggested`
+    flag, and `fonts` (`{key, family}`): font keys are the `ThemeFont` enum of the prototype's families (`09` §19
+    open, Q-022);
+  - `POST /api/v1/projects/{projectId}/initialize` takes `{templateId, stylePreset?, languages?, defaultLanguage?,
+    surfaces?, featureConfiguration?}`; a language is a code or `{languageCode, displayName?, direction?}`. Defaults:
+    the Template's `defaultStylePreset`, its `defaultLanguages` (names and direction from `KnownLanguages`, else the
+    Project's existing row), the first language as default, every supported surface, every declared capability
+    enabled (`CHATBOT` disabled). One transaction after the Catalogue check: lock the companion row
+    (`SELECT ... FOR UPDATE`, so a concurrent second call waits and then gets `409`), settings, theme from the
+    preset with `shell` from `defaultShell`, languages through the languages endpoint's own rules
+    (`ProjectLanguagesWriter`, including `DEFAULT_LANGUAGE_INCOMPLETE`), surfaces (listed enabled, others disabled,
+    saved configuration such as `publicBaseUrl` kept over `runtimeDefaults`), Categories (DRAFT, translations in the
+    enabled languages, a code the Project already has skipped), the provenance row, `initializedAt`. A failure
+    rolls everything back, so a re-run never duplicates; rows the author set in App settings before are updated.
+    The answer is the Project as `GET /projects/{id}` gives it. `409 PROJECT_ALREADY_INITIALIZED` once
+    `initializedAt` is set; `422 VALIDATION_ERROR` with paths `templateId` (`REQUIRED`, `TEMPLATE_NOT_FOUND`,
+    `TEMPLATE_NOT_ACTIVE`), `stylePreset` (`STYLE_PRESET_NOT_OFFERED`), `languages`, `languages[i].*`,
+    `defaultLanguage` (`DEFAULT_LANGUAGE_NOT_LISTED`), `surfaces`, `surfaces[i]` (`SURFACE_NOT_SUPPORTED`,
+    `DUPLICATE_VALUE`, `REQUIRED`), `featureConfiguration.<CAPABILITY>` (`CAPABILITY_NOT_IN_TEMPLATE`,
+    `UNKNOWN_CAPABILITY`);
+  - before initialization nothing restricts languages and surfaces (the CMS sets them in App settings); after it,
+    `PUT .../surfaces` refuses enabling a surface the Template does not support (`SURFACE_NOT_SUPPORTED` at
+    `surfaces[i].surface`) through the `SurfaceSupport` port the template package implements;
+  - `GET`, `PUT .../theme` and `GET`, `PUT .../settings` answer `409 PROJECT_NOT_INITIALIZED` before
+    initialization. The theme `PUT` replaces typed values, preset key, logos, and shell, with `version`
+    (`VERSION_CONFLICT`); a `null` typed value takes the Template default (`04` §10, `effective` in the answer);
+    errors `INVALID_COLOR`, `VALUE_NOT_ALLOWED`, `STYLE_PRESET_NOT_OFFERED`, `UNKNOWN_KEY` / `VALUE_NOT_ALLOWED` /
+    `TOO_LONG` at `shell.<key>`, `ASSET_NOT_FOUND` / `ASSET_NOT_IMAGE` at the logo fields, `CONTRAST_TOO_LOW` at
+    `textColor` (4.5:1), `primaryColor`, `secondaryColor` (3:1) against the effective background. Choosing a preset
+    is a `PUT` with its values; `stylePresetModified` compares the effective values with the preset's. The settings
+    `PUT` sets the listed capabilities (others keep their value) and `timezone` (IANA, `INVALID_TIMEZONE`);
+    `applicationStatus` is read-only and `DRAFT` (no transition endpoint yet). The default language stays in
+    `project_languages.is_default` (D-019), not in `project_settings`;
+  - readiness: `THEME_CONTRAST_FAILED` at `theme.<field>` and `TEMPLATE_VALIDATION_FAILED` at `surfaces` for an
+    initialized Project; nothing for an uninitialized one;
+  - Project picker (`12` §3): `GET` and `PATCH /projects/{id}` and the initialize answer add `initializedAt`,
+    `template {id, key, version, name}`, `stylePresetKey`, `applicationStatus`, `enabledSurfaces`, read through the
+    `ProjectInitializationReader` port. The organization listing stays a passthrough that touches no local state
+    (`02` §11), so it carries none of them and `initialized` stays `false` there; the CMS reads `GET /projects/{id}`
+    per Project (QUESTIONS.md Q-020). Before initialization `applicationStatus` is `DRAFT` and `enabledSurfaces`
+    lists what App settings enabled; nothing of a failed attempt is kept, so "resume" opens step 2 with the
+    Template's defaults;
+  - packages: `template` (Templates, presets, seeding, provenance), `theme`, `settings`, `initialization` (the use
+    case and the reader, so `template` depends on neither `theme` nor `settings`). Not built: Pages, Page
+    Components, Navigation (M6), `TEMPLATE_APPLIED` (no audit table, M7), the activation endpoint (GAPS.md G-038).
+- Why: the CMS "Create a Project" needs the Template and style step, the languages and surfaces step, and resume.
+- Alternatives: raw-file checksums (rejected: a CRLF checkout would fail startup); checksum over the whole file
+  (rejected: the spec moves status through the file); enriching the organization listing from local rows
+  (rejected for now: `02` §11 forbids local state in listings, Q-020); materializing `runtimeDefaults` keys the
+  surfaces endpoint refuses (rejected: the next CMS save would fail, G-035); `404` for theme and settings before
+  initialization (rejected: the CMS needs to tell "not initialized" from "no access").
+- Evidence: TRACEABILITY.md R26.
+- Affected specs: `03` §2; `04` §3, §6–11, §15; `07` §8, §14, §15; `12` §3, §4. Questions Q-020, Q-021, Q-022.
+
+## D-041 (2026-11-04) — Places bind media
+
+- Type: owner decision (2026-11-04: "in places I should have the opportunity to add images"), revising D-025
+- Decision: `PLACE` joins the `ResourceAsset` kinds. `.../places/{id}/resource-assets` and `:order` work as for the
+  other kinds (DRAFT Place only, Asset of the same Project, usage and type rules, archival of a bound Asset refused
+  with the Place named in `references`); `PlaceResponse` carries `media` in order, in reads, lists, working copies
+  and applies; the Place working copy carries `media` as one list (INLINE excluded) and apply replaces the bindings,
+  as for Points of Interest (D-027). Changeset `0043-resource-assets-for-places` widens
+  `ck_resource_assets_resource_type`. The CMS offers a primary image and a gallery.
+- Why: `03` §4 lists `ResourceAsset.resourceType` without restricting it; D-025 had left Places out only because
+  the CMS mockup showed no media on them.
+- Alternatives: a single `heroAssetId` column on `places` (a second mechanism next to the bindings).
+- Affected specs: `03` §4, §5; `07` §14; `12` §3 Place.
+
+
+## D-042 (2026-11-09) — `contentRevision` upkeep
+
+- Type: spec implementation (owner request 2026-11-09, CMS to-do B3)
+- Decision: `ContentRevision` (settings module) raises `project_settings.content_revision` by one SQL increment in
+  the caller's transaction on: apply of a working copy; a lifecycle transition into or out of `ACTIVE` of every
+  Resource kind and of triggers (DRAFT to ARCHIVED and ARCHIVED to DRAFT stay invisible, so they do not count); an
+  in-place edit of an `ACTIVE` trigger or `ACTIVE` Asset (both are edited live, D-025, D-026); every save of the
+  theme, languages, surfaces, and settings. Saves into a working copy, DRAFT edits, Project initialization, and the
+  passage of time do not raise it. The entity maps the column `updatable = false`, so a settings save never writes
+  back a stale value, and the increment does not move the settings' own `version`. A Project without settings has
+  no revision and the increment touches no row. Navigation and `applicationStatus` join when they exist (M6, G-038).
+- Why: `03` §2 (lines 310-314), `11` §4, `07` §14; the CMS shows the revision on the Dashboard (`12` §3).
+- Alternatives: incrementing through the entity (lost steps under concurrent mutations and a settings
+  `VERSION_CONFLICT` for authors who never touched the settings); counting every status change (the spec counts
+  only what visitors could see).
+- Affected specs: `03` §1, §2; `07` §14; `11` §4; `08` M8.
+
+## D-043 (2026-11-10) — Audio and video durations; deleting stored objects nothing points at
+
+- Type: spec implementation and interpretation (owner request 2026-11-10, CMS to-do B7)
+- Decision:
+  - `durationSeconds` (`03` §4) is read from the container header of every `AUDIO` and `VIDEO` upload and
+    replacement by `MediaDuration`, in plain Java: ISO base media (MP4, M4A, MOV, 3GP) `mvhd`; Matroska and WebM
+    `Info` `Duration` × `TimecodeScale`; MP3 Xing, Info, or VBRI frame count, else the constant bitrate; WAV `data`
+    over the byte rate; Ogg Vorbis and Opus last granule over the sample rate (Opus less its pre-skip); FLAC
+    `STREAMINFO`. Nothing is decoded or transcoded, which `09` §2 leaves open. A format it does not know, or a
+    header it cannot read, leaves `durationSeconds` null as before; the upload never fails over it. Assets uploaded
+    earlier keep null until their file is replaced;
+  - stored objects no Asset points at are deleted (`04` §10: binary operations outside the database transaction
+    need an outbox or cleanup strategy). `AssetStorage.delete` is added (`07` §10 lists it on the port):
+    - an upload or replacement whose metadata write fails deletes the object it just stored, best effort (logged
+      when the store refuses);
+    - a replacement queues the old object in `asset_storage_cleanups` (changeset 0044, group 3) in the same
+      transaction, due after the signed URL lifetime plus five minutes (`AssetRules.URL_VALIDITY`), so a page that
+      is open keeps showing the old file until its URL expires;
+    - `PurgeAssetObjectsUseCase` runs every `iguide.assets.cleanup-interval` (default `PT10M`, not in the `10` §3
+      property contract yet), deletes the due objects, keeps an entry whose delete failed for the next run, and
+      never deletes an object an Asset points at. It is the one reader across Projects; it reads only keys, which
+      name their Project, and needs an exception when Row-Level Security arrives (G-022);
+  - Assets are never deleted (archival is soft, `03` §1), and Project data cleanup stays open (`09` §9), so these
+    are the only objects that lose their Asset today. The replacement now also re-checks that the Asset is still a
+    DRAFT inside its transaction.
+- Why: GAPS G-032 ("`durationSeconds` is never measured", "objects of replaced files and of failed metadata writes
+  are never cleaned up"); the CMS library and editor already show the duration (`12` §3 Media).
+- Alternatives: `ffprobe` in the container (a native binary and a process per upload, for a header read);
+  a media library dependency (none covers MP4, WebM, MP3, Ogg, and FLAC together without decoding); deleting the
+  old object at once (breaks signed URLs already handed out); listing the bucket for orphans (reads every object
+  and races uploads in progress).
+- Affected specs: `03` §4; `04` §10 (line 290); `07` §10; `09` §2, §9; `10` §3.
+
+## D-044 (2026-11-10) — Placements and positions of an ACTIVE map or plan go into its working copy
+
+- Type: spec implementation (owner request 2026-11-10, CMS to-do B8)
+- Decision: `POST`, `PUT`, and `DELETE` on `.../maps/{id}/resources` and `.../floor-plans/{id}/positions` write into
+  the parent's working copy when the parent is `ACTIVE`, as `07` §14 says for child writes ("never into the live
+  child rows ... the response is the same shape either way"); a DRAFT parent is written directly as before and an
+  ARCHIVED one is still `422 RESOURCE_NOT_EDITABLE`. Interpretations:
+  - `PatchWorkingCopyUseCase` (workingcopy module) takes the copy's payload, or the parent's live state when it has
+    no copy, applies one child change, and saves it through `SaveWorkingCopyUseCase`, so the dry run validates it
+    and the copy's version rules hold: a copy saved by someone else between the read and the save is
+    `409 VERSION_CONFLICT`. The endpoints carry no version, as on a DRAFT parent;
+  - the checks and error paths are those of a DRAFT parent (`resourceType`, `resourceId`, `latitude`, `x`, ...;
+    a second placement of a Resource is `409 DUPLICATE_VALUE` at `resourceId`; an unknown id `404`), checked against
+    the copy's list;
+  - a placement or position added this way gets an id in the copy, which later `PUT` and `DELETE` calls use; apply
+    gives it a row of its own with a new id (the rows' ids are generated by the database layer). Existing ones keep
+    their ids through apply;
+  - `GET .../resources` and `.../positions` still list the live rows; the pending state is read from
+    `GET .../working-copy`, like every other pending field;
+  - the row writes the apply uses moved to `MapPlacementWriter` and `FloorPlanPositionWriter`, so the endpoint use
+    cases can depend on the working copy without a dependency cycle through the handlers;
+  - the map's and plan's own fields, `placeId` included, still change only through a whole working copy (`PUT` of an
+    ACTIVE map stays `422`, D-027); route stops, guide blocks, and event occurrences under an ACTIVE parent stay
+    `422` too (G-034).
+  - Supersedes, for these two child collections, the D-027 bullet that kept them `422`.
+- Why: `07` §14; GAPS G-034; CMS to-do B8.
+- Alternatives: patching the stored JSON without the dry run (would accept a payload apply then refuses);
+  `@Lazy` injection to break the cycle (hides it; no precedent in the code base).
+- Affected specs: `07` §14; `03` §1, §7, §8; `12` §7.
+
+## D-045 (2026-11-10) — Stops, blocks, and occurrences of an ACTIVE Route, Guide, or Event go into its working copy
+
+- Type: spec implementation (owner request 2026-11-10, CMS to-do B16)
+- Decision: the child endpoints of `07` §14 for Route stops (`POST`, `PUT`, `DELETE`, `PUT .../stops:order`), Guide
+  blocks (the same four), and Event occurrences (`POST`, `PUT`, `DELETE`) write into the parent's working copy when
+  the parent is `ACTIVE`, as D-044 does for map placements and floor plan positions; DRAFT parents are written
+  directly as before and ARCHIVED ones are still `422 RESOURCE_NOT_EDITABLE`. Interpretations:
+  - the same `PatchWorkingCopyUseCase`, now told which child it changed (`stops[2]`), so errors from the copy's dry
+    run are reported at the child's own fields (`poiId`, `endsAt`, `resourceId`), as on a DRAFT parent
+    (`ErrorPaths.outside`, the reverse of `within`); the D-044 endpoints report the same way;
+  - the answer is the child as it stands in the copy, in the endpoint's usual shape: position or sort order from its
+    place in the list, texts as sent (normalized when the copy is applied); a new child has an id in the copy and
+    gets a row id at apply, as in D-044;
+  - `PUT` on a stop or block upserts the languages it sends and keeps the others, as on a DRAFT parent; a block keeps
+    its type; `:order` must list every child of the copy once (`422 INCOMPLETE_ORDER` at `ids`);
+  - the occurrence limit counts the copy's occurrences;
+  - the row writes the apply uses moved to `RouteStopWriter`, `GuideBlockWriter`, and `EventOccurrenceWriter`, as in
+    D-044, so the endpoint use cases depend on the working copy without a cycle; the endpoint use cases answer
+    `StopData`, `BlockData`, and `WantedOccurrence` records for both paths;
+  - the child translation endpoints already wrote into the copy (D-032); every child endpoint of `07` §14 that
+    exists now follows its rule. Pages and Navigation items join with M6.
+  - Supersedes the D-027 bullet that kept child endpoints under an ACTIVE parent at `422`.
+- Why: `07` §14; GAPS G-034; CMS to-do B16. The CMS editors save whole working copies and are not affected.
+- Alternatives: as in D-044.
+- Affected specs: `07` §14; `03` §1, §10, §11, §15.
+
+## D-046 (2026-11-11) — Navigation: the PRIMARY menu and the FOOTER links
+
+- Type: spec implementation and interpretation (owner request 2026-11-11, CMS to-do B15; part of Milestone 6)
+- Decision: the `navigation` module, changesets 0045–0047 in the new group 5 file `05-pages-and-navigation.sql`
+  (`navigations`, `navigation_items`, `navigation_item_translations`), and the paths of `07` §14 under
+  `/navigations`. Interpretations:
+  - `itemType` (named, not defined, in `03` §13) is `RESOURCE` (opens a Place, POI, Route, Guide, or Event: the
+    kinds with a detail screen, `11` §9), `PAGE` (refused with `422 UNSUPPORTED_TYPE` until Pages exist), or `GROUP`
+    (a heading of the PRIMARY tree with no target, whose children form a submenu); owner decision 2026-11-11.
+    A GROUP needs a label in the default language, having no target title to fall back on; FOOTER items are flat
+    links (`06` §12), so neither a parent nor a GROUP there;
+  - a Navigation is created by `POST /navigations` `{context, name}`, at most one per context (`409 DUPLICATE_VALUE`
+    at `context`); Templates define no initial Navigations (`initialNavigations` stays empty), so initialization
+    creates none;
+  - every read and write answers the whole Navigation with its items in tree order (each after its parent,
+    siblings by `sortOrder`), each with its `depth` and its labels by language, so the editor redraws from one
+    answer; `POST .../items` answers `201` with the Navigation;
+  - items carry versions (`PUT`, `DELETE ?version=`, and the per-language label endpoints); a new item and a moved
+    one go last among their new siblings and the gap they leave closes; deleting an item deletes its subtree (the
+    database cascades); `:order` takes every item of the Navigation once in tree order and orders each sibling
+    group, without changing parents; a parent under the item itself is `422 CYCLIC_PARENT` (`08` M6);
+  - `labels` in an item body change only the languages they name, a blank label removes one; without a label the
+    visitor app uses the target's title (`03` §13);
+  - every write is live and raises `contentRevision` in its transaction (`03` §1, D-042); `NAVIGATION_UPDATED`
+    (`05`) waits for the audit log (G-023);
+  - menu items are referrers of their targets: they appear in "Used in" as `NAVIGATION` (title "Main menu: label")
+    and, like every referrer, keep the target from being deactivated or archived, so a menu never offers a dead
+    entry;
+  - readiness: a GROUP without its default-language label blocks, its missing other labels warn
+    (`MISSING_TRANSLATION`); a missing or archived target blocks (`DANGLING_REFERENCE`); a target whose capability
+    is off warns (`CAPABILITY_DISABLED`, `03` §2), read through the new `CapabilityLookup`; paths are
+    `items[i]…` in tree order;
+  - the manifest's `navigation` (`11` §4) waits for the runtime API (Milestone 8, G-034).
+- Why: `03` §13, `06` §11–12, `07` §14, `08` Milestone 6, `12` §3 Navigation editor.
+- Alternatives: a nested JSON tree saved whole (concurrent edits of different items would conflict); deleting a
+  group only when empty (the CMS asks first instead); archival allowed with a readiness warning (the menu would then
+  point at nothing until someone noticed).
+- Affected specs: `03` §1, §2, §13; `06` §11, §12, §15; `07` §14; `08` Milestone 6; `11` §4; `12` §3.

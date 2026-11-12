@@ -171,7 +171,7 @@ Only commands that ran on 2026-10-02. Prerequisites: JDK 21, Docker Engine (29.x
 | Command | Needs | Result |
 |---|---|---|
 | `cp .env.example .env` | — | `.env` is gitignored; fill `DB_PASSWORD` |
-| `./mvnw -B verify` or `make verify` | Docker for Testcontainers | 240 tests pass (2026-10-23) |
+| `./mvnw -B verify` or `make verify` | Docker for Testcontainers | 323 tests pass (2026-11-04) |
 | `docker compose up --build -d` or `make infra-up` | Docker, `.env` | app healthy after about 85 s on a cold build |
 | `curl -s localhost:8080/iguide/actuator/health` or `make health` | running stack | `{"status":"UP"}` |
 | `docker compose down -v` or `make infra-down` | — | stack and volume removed |
@@ -226,3 +226,18 @@ Before a session ends, PLAN.md, GAPS.md, and TRACEABILITY.md are truthful.
 
 <!-- Layer sections (tenancy and RLS, security flow, templates, assets, runtime) are appended below as
      slices land. -->
+
+## 10. Templates and initialization layer
+
+Since 2026-11-04 (DECISIONS.md D-040):
+
+- Template versions are `src/main/resources/templates/{key}.v{version}.json`, style presets
+  `src/main/resources/style-presets/{key}.json`. They are seeded at startup by `template.application.TemplateSeeder`
+  and are never written through the API. Never edit the `definition` of a released version, or the `values` of a
+  released preset: once a Project uses it, startup fails. Release a new version (or a preset under a new key);
+  `status`, `name`, and `description` may change in place;
+- packages: `template` (Templates, presets, seeding, provenance), `theme`, `settings`, and `initialization`
+  (`POST .../initialize` and the reader behind the Project picker fields). `surface` and `project` reach Template
+  data only through the ports `SurfaceSupport` and `ProjectInitializationReader`;
+- languages and surfaces stay writable before initialization (the CMS sets them in App settings); the theme and the
+  settings answer `409 PROJECT_NOT_INITIALIZED` until a Template has initialized the Project.
