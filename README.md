@@ -49,12 +49,11 @@ docker compose up --build
 curl -i localhost:8080/iguide/actuator/health
 ```
 
-Three containers: this application, PostgreSQL, and MinIO, an S3-compatible store for asset bytes
-(DECISIONS.md D-025). MinIO creates the private bucket `iguide-assets` at startup; its console is at
-`http://localhost:9001`. Liquibase runs at application startup.
+Two containers: this application and PostgreSQL. Asset files live on the `assets-data` volume, mounted at
+`/app/assets` (DECISIONS.md D-047). Set `ASSETS_SIGNING_KEY` in `.env` first (`openssl rand -hex 32`); links
+to files are signed with it. Liquibase runs at application startup.
 
-Without Docker, provide a PostgreSQL instance and an S3-compatible bucket (the `ASSETS_S3_*` variables)
-and run:
+Without Docker, provide a PostgreSQL instance and a writable `ASSETS_DIR` and run:
 
 ```bash
 export $(grep -v '^#' .env | xargs)
@@ -62,7 +61,8 @@ export $(grep -v '^#' .env | xargs)
 ```
 
 The application refuses to start without an explicit `IDP_ISSUER_URI` and `CATALOGUE_BASE_URL`, and
-without a reachable asset bucket.
+without `ASSETS_SIGNING_KEY` and a writable asset directory. Back up the `assets-data` volume together with the
+database.
 
 ## Testing
 

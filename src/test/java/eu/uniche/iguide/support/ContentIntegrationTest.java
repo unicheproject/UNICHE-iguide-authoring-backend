@@ -140,6 +140,11 @@ public abstract class ContentIntegrationTest extends PostgresIntegrationTest {
         return out.toByteArray();
     }
 
+    /** The request URI of a signed Asset link: MockMvc has no context path or host, so only path and query stay. */
+    protected static java.net.URI fileLink(String url) {
+        return java.net.URI.create("/api/v1/asset-files?" + java.net.URI.create(url).getRawQuery());
+    }
+
     protected static String assetUrl(UUID projectId) {
         return "/api/v1/projects/" + projectId + "/assets";
     }

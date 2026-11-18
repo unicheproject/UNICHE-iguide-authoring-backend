@@ -51,7 +51,7 @@ public class GetAssetQuery {
     public SignedLink download(UUID projectId, UUID assetId, UnichePrincipal principal) {
         accessGateway.requireAccess(projectId, principal);
         Asset asset = rules.requireAsset(projectId, assetId);
-        return new SignedLink(storage.signedDownloadUrl(asset.getStorageKey(), AssetRules.URL_VALIDITY,
-                asset.getOriginalFilename()), Instant.now().plus(AssetRules.URL_VALIDITY));
+        return new SignedLink(storage.signedDownloadUrl(asset.getStorageKey(), AssetRules.URL_VALIDITY),
+                Instant.now().plus(AssetRules.URL_VALIDITY));
     }
 }

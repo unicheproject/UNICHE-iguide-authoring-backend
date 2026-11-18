@@ -1090,3 +1090,51 @@ Append-only. An entry is never edited or removed; a later entry supersedes it by
   group only when empty (the CMS asks first instead); archival allowed with a readiness warning (the menu would then
   point at nothing until someone noticed).
 - Affected specs: `03` §1, §2, §13; `06` §11, §12, §15; `07` §14; `08` Milestone 6; `11` §4; `12` §3.
+
+## D-047 (2026-11-18) — Assets on local disk behind signed links; S3 and MinIO removed
+
+- Type: spec-interpretation and owner decision (2026-11-18, instructed by the owner in the session)
+- Decision: asset bytes are stored on local disk instead of S3-compatible storage, which supersedes the storage
+  part of D-025. Why now: the signed S3 URLs named `iguide-assets.uniche-eccch.eu`, a host that has no DNS and
+  will get none; files must be served from the same domain as the CMS. Interpretations:
+  - `LocalDiskAssetStorage` is the only `AssetStorage`; `S3AssetStorage`, the AWS SDK dependency, the MinIO service
+    and the `iguide.assets.s3.*` properties are removed. No property switch keeps S3 (owner choice);
+  - files live under `iguide.assets.dir` (`ASSETS_DIR`, a volume at `/app/assets` in the container) at the existing
+    keys (`projects/{p}/assets/{a}/original`, `.../revisions/{uuid}`); a key is resolved with a path-traversal
+    guard like MuseotekBox's `LocalDiskMediaStorage`; an upload is written to a temporary file and moved into
+    place; `delete` throws when it fails so the purge job of D-043 retries; the backend must run as one instance;
+  - a signed link is `GET {public-base-url}/iguide/api/v1/asset-files?key&exp&disp&sig`; `sig` is an
+    HMAC-SHA256 over `key|exp|disposition` (`disp` is `inline` or `attachment`) with `iguide.assets.signing-key`
+    (`ASSETS_SIGNING_KEY`, required, at least 32 characters, no default, startup fails when unset), compared in
+    constant time; the endpoint is public (`permitAll`, GET only) because the signature is the credential
+    (`07` §10: the files stay private and are never public for `<img src>`);
+  - every failure (signature, expiry, unknown or malformed key, missing file) answers the same `404`;
+    only keys of the form `projects/{uuid}/assets/{uuid}/(original|revisions/{uuid})` are served; MIME type and
+    original filename come from the Asset; Range requests answer `206`; files are sent with
+    `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and a type other than image,
+    audio, video, model, or PDF is sent as an `application/octet-stream` attachment, because the files are
+    same-origin with the CMS;
+  - link validity is one hour (`AssetRules.URL_VALIDITY`, was 15 minutes) so a video can be watched and seeked;
+    the purge grace of D-043 follows it (65 minutes);
+  - `AssetStorage` gains `open(key)`; `signedDownloadUrl` no longer takes a filename (it comes from the Asset when
+    the file is served);
+  - `iguide.assets.public-base-url` (`ASSETS_PUBLIC_BASE_URL`, optional) adds an origin to links for local
+    development, where the CMS runs on another port than the API.
+- Why: see above; one volume replaces a second service, a second host, and its credentials.
+- Alternatives: a reverse-proxy path to MinIO with the signature covering the public host (rejected by the
+  owner in favour of removing MinIO); a property switch keeping S3 (rejected by the owner).
+- Consequences: Tomcat threads serve large videos; the volume must be backed up; no horizontal scaling without
+  shared storage; objects already in MinIO are not migrated (production holds practically none).
+- Owner approval: 2026-11-18, including the edit of `[ARC_9.4]` statements in the specs (`10` §3, §7, `07` §10,
+  README item 10), made in the session under the owner-instruction exception of D-002 (Q-023).
+- Affected specs: `10` §3, §6, §7; `07` §10; `README` item 10.
+
+## D-048 (2026-11-18) — Specs baseline moved for the local-disk assets edits
+
+- Type: implementation
+- Decision: the owner instructed edits to the specs for D-047 (`10` §3, §6, §7; `07` §10; `01`; `08`; `11`;
+  `README` item 10 and the ARC_9.4 row) and had them committed (`87f56bb`) and pushed. The baseline in AGENTS.md
+  moves from `a792ede` to that commit; the exception to D-002 is recorded here.
+- Why: D-002 allows a spec edit only on an explicit owner instruction in the session, recorded in this file.
+- Alternatives: leaving the edits as a `spec-change-request` only (rejected by the owner).
+- Affected specs: see D-047.

@@ -60,15 +60,15 @@ Session reading order:
 ## 3. Specs baseline
 
 ```text
-baseline  a792ede3086068f24ffb2c07f608215bee4ec516  (2026-10-02 15:36 +0300)
+baseline  87f56bb35b3ce8bbdcdc81f9514114f2a11936c6  (2026-11-18)
 ```
 
-Moved on 2026-10-02 from `1c982b6` to the commit holding the owner-instructed edits (DECISIONS.md D-016).
+Moved on 2026-11-18 from `a792ede` to the commit holding the owner-instructed edits for local-disk assets (DECISIONS.md D-047, D-048); on 2026-10-02 from `1c982b6` to `a792ede` (D-016).
 
 Every session starts with:
 
 ```bash
-git -C ../uniche_iguide_specs log --oneline a792ede3086068f24ffb2c07f608215bee4ec516..HEAD
+git -C ../uniche_iguide_specs log --oneline 87f56bb35b3ce8bbdcdc81f9514114f2a11936c6..HEAD
 git -C ../uniche_iguide_specs status --short
 ```
 

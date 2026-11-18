@@ -31,7 +31,8 @@ RUN java -Djarmode=tools -jar application.jar extract --layers --destination ext
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-RUN addgroup -S iguide && adduser -S iguide -G iguide
+RUN addgroup -S iguide && adduser -S iguide -G iguide \
+    && mkdir /app/assets && chown iguide:iguide /app/assets
 USER iguide:iguide
 
 COPY --from=extract --chown=iguide:iguide /extract/extracted/dependencies/ ./
@@ -39,6 +40,8 @@ COPY --from=extract --chown=iguide:iguide /extract/extracted/spring-boot-loader/
 COPY --from=extract --chown=iguide:iguide /extract/extracted/snapshot-dependencies/ ./
 COPY --from=extract --chown=iguide:iguide /extract/extracted/application/ ./
 
+# Asset files: mount a volume here. Created owned by the application user so a new named volume is writable.
+VOLUME /app/assets
 EXPOSE 8080
 
 # The same endpoint the orchestrator probes. It is the one operational endpoint reachable without

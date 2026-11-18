@@ -165,7 +165,7 @@ Keycloak and the Catalogue).
     signed URL lifetime on a replacement);
   - no theme references to Assets (Milestone 2), so an Asset used by a theme is not kept in use;
   - an ACTIVE Resource changes its media only through its working copy since 2026-10-21 (D-027).
-- Closed by: Milestones 2, 8, and 13, and a storage cleanup job.
+- Closed by: Milestones 2, 8, and 13, and a storage purge job (a retention rule is needed).
 
 ### G-033 — Triggers: QR image, capabilities, list chips, other targets
 

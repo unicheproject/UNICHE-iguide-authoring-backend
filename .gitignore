@@ -22,3 +22,4 @@ docker-compose.override.yml
 
 # Eclipse JDT annotation processor state
 .factorypath
+/assets/

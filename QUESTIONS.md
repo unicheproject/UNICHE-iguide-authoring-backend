@@ -264,6 +264,19 @@ None open. Q-002 and Q-003 were resolved on 2026-10-02 and are kept here for ref
   add `onPrimaryColor` to `04` §9 and decide `09` §19.
 - Assumption taken: as described (D-040).
 
+### Q-023 — Assets on local disk instead of S3 [ARC_9.4]
+
+- Kind: spec-change-request (applied to the specs on the owner's instruction, 2026-11-18)
+- Source: `10` §3, §7; `07` §10; `README` item 10.
+- Finding: `10` §7 says assets live in S3-compatible storage in every environment and that there is no
+  filesystem implementation. The production deployment cannot give the store a host of its own, and the
+  owner wants the files served from the CMS's domain.
+- Proposed: assets live on a local volume behind HMAC-signed, expiring links served by the backend; the
+  `iguide.assets.s3.*` properties become `iguide.assets.dir`, `iguide.assets.signing-key` and
+  `iguide.assets.public-base-url`.
+- Assumption taken: as proposed (D-047). The platform architecture (D4.3 section 9.4) names S3-compatible storage
+  as an infrastructure component; whether that binds the tools' own asset stores is for the platform owner.
+
 ### Open decisions of `09` that shape the next milestones
 
 | `09` | Shapes or blocks |

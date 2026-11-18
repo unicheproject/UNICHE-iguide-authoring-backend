@@ -34,8 +34,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class AssetRules {
 
-    /** Long enough to browse a library page, short enough that a leaked URL soon stops working. */
-    public static final Duration URL_VALIDITY = Duration.ofMinutes(15);
+    /** Long enough to watch a video and seek in it, short enough that a leaked URL stops working (D-047). */
+    public static final Duration URL_VALIDITY = Duration.ofHours(1);
     static final int MAX_TEXT = 2000;
     static final int MAX_TRANSCRIPT = 100_000;
 

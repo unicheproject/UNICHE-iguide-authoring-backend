@@ -1,14 +1,16 @@
 package eu.uniche.iguide.support;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.wait.strategy.Wait;
 
 /**
  * Base class for every test that touches persistence.
@@ -23,8 +25,7 @@ import org.testcontainers.containers.wait.strategy.Wait;
  * <p>The issuer points at {@link TestIdp}, so the production security configuration is used unmodified —
  * real discovery, real decoder, real validators.
  *
- * <p>Asset bytes go to an S3 mock container through the production S3 client ({@code 10} section 7: the
- * code path tested is the one that runs in production).
+ * <p>Asset files go to a temporary directory through the production local-disk storage.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -35,26 +36,26 @@ public abstract class PostgresIntegrationTest {
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:16-alpine");
 
-    /** The bucket the test configuration names; created by the mock at startup. */
-    protected static final String ASSET_BUCKET = "iguide-assets-test";
-
-    static final GenericContainer<?> S3 = new GenericContainer<>("adobe/s3mock:5.2.3")
-            .withEnv("COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS", ASSET_BUCKET)
-            .withExposedPorts(9090)
-            .waitingFor(Wait.forLogMessage(".*Started S3MockApplication.*", 1));
+    /** Where this build's asset files go; one directory for the whole JVM, like the container. */
+    protected static final Path ASSET_DIR = createAssetDir();
 
     static {
         POSTGRES.start();
-        S3.start();
     }
 
     @DynamicPropertySource
     static void platformEndpoints(DynamicPropertyRegistry registry) {
         registry.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", TestIdp::issuer);
-        registry.add("iguide.assets.s3.endpoint", PostgresIntegrationTest::s3Endpoint);
+        registry.add("iguide.assets.dir", ASSET_DIR::toString);
     }
 
-    protected static String s3Endpoint() {
-        return "http://" + S3.getHost() + ":" + S3.getMappedPort(9090);
+    private static Path createAssetDir() {
+        try {
+            Path dir = Files.createTempDirectory("iguide-assets-test");
+            dir.toFile().deleteOnExit();
+            return dir;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }

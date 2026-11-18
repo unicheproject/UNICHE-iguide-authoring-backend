@@ -42,10 +42,10 @@ Keycloak and Catalogue. Frontend counterpart: `../uniche_iguide_frontend/PLAN.md
   card in their editors. Since 2026-10-22 `qr.png` renders real images from the WEB surface's address (D-029,
   R15). Open: capabilities, Pages (G-033); the rest of Surfaces (G-035).
 
-### M3 — Assets, S3 storage, and media bindings
+### M3 — Assets, storage, and media bindings
 
 - Owner-instructed after M4c; interpretations in DECISIONS.md D-025; spec questions in QUESTIONS.md Q-014.
-- Status: backend code and tests green (TRACEABILITY.md R11); MinIO in the local composition; the CMS
+- Status: backend code and tests green (TRACEABILITY.md R11); assets on local disk behind signed links since 2026-11-18 (D-047); the CMS
   adapters use the endpoints. Open: provenance warnings, runtime delivery (G-032); duration measurement and
   storage cleanup done 2026-11-10 (D-043).
 - 2026-11-04: Places bind media too (owner request, D-041): primary image and gallery, working copy included.

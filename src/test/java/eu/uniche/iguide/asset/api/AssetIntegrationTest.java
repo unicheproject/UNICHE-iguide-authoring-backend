@@ -11,10 +11,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import eu.uniche.iguide.asset.application.PurgeAssetObjectsUseCase;
 import eu.uniche.iguide.support.ContentIntegrationTest;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -28,7 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockMultipartFile;
 
-/** Assets: upload to S3, metadata, texts, lifecycle, and where-used ({@code 03} section 4, {@code 08} Milestone 3). */
+/** Assets: upload to the asset store, metadata, texts, lifecycle, and where-used ({@code 03} section 4, {@code 08} Milestone 3). */
 class AssetIntegrationTest extends ContentIntegrationTest {
 
     @Autowired
@@ -58,15 +54,14 @@ class AssetIntegrationTest extends ContentIntegrationTest {
         assertThat(asset.get("height").asInt()).isEqualTo(30);
         assertThat(asset.get("usageCount").asLong()).isZero();
 
-        HttpResponse<byte[]> fetched = HttpClient.newHttpClient().send(
-                HttpRequest.newBuilder(URI.create(asset.get("url").asText())).build(),
-                HttpResponse.BodyHandlers.ofByteArray());
-        assertThat(fetched.statusCode()).isEqualTo(200);
-        assertThat(fetched.body()).isEqualTo(bytes);
+        // The signed link needs no bearer token: the signature is the credential.
+        byte[] fetched = mockMvc.perform(get(fileLink(asset.get("url").asText())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(fetched).isEqualTo(bytes);
 
         JsonNode link = read(mockMvc.perform(authenticated(get(assetUrl(PROJECT_A) + "/{id}/download",
                 asset.get("id").asText()))).andExpect(status().isOk()).andReturn());
-        assertThat(link.get("url").asText()).contains("response-content-disposition");
+        assertThat(link.get("url").asText()).contains("disp=attachment");
     }
 
     @Test
@@ -174,7 +169,7 @@ class AssetIntegrationTest extends ContentIntegrationTest {
         purge.purgeDue(Instant.now());
         assertThat(fetch(oldUrl)).isEqualTo(200);
 
-        assertThat(purge.purgeDue(Instant.now().plus(Duration.ofHours(1)))).isPositive();
+        assertThat(purge.purgeDue(Instant.now().plus(Duration.ofHours(2)))).isPositive();
         assertThat(fetch(oldUrl)).isEqualTo(404);
         assertThat(fetch(replaced.get("url").asText())).isEqualTo(200);
 
@@ -242,9 +237,9 @@ class AssetIntegrationTest extends ContentIntegrationTest {
                 .andExpect(status().is(expected)).andReturn());
     }
 
-    private static int fetch(String url) throws Exception {
-        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create(url)).build(),
-                HttpResponse.BodyHandlers.discarding()).statusCode();
+    /** The status of a signed link, followed without a bearer token as a browser does. */
+    private int fetch(String url) throws Exception {
+        return mockMvc.perform(get(fileLink(url))).andReturn().getResponse().getStatus();
     }
 
     /** A PCM WAV file of silence: 8-bit mono, so {@code byteRate} bytes make one second. */

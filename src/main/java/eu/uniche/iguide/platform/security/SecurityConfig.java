@@ -65,6 +65,9 @@ public class SecurityConfig {
                         // specification package; until it is settled, treat public exposure of the
                         // full API schema as unintended and keep these behind authentication.
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // Signed Asset links: a browser cannot send a bearer token from <img> or <video>, so the
+                        // HMAC signature in the link is the credential (DECISIONS.md D-047).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/asset-files").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .authenticationEntryPoint(entryPoint)
